@@ -38,7 +38,7 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
   db.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS cases (
       id TEXT PRIMARY KEY, patient TEXT NOT NULL, status TEXT NOT NULL, pathway TEXT, due TEXT, next_action TEXT,
-      state_json TEXT, last_day INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+      state_json TEXT, last_day INTEGER, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, side TEXT, group_id TEXT
     );
     CREATE TABLE IF NOT EXISTS inputs (
       id TEXT PRIMARY KEY, case_id TEXT NOT NULL REFERENCES cases(id), type TEXT NOT NULL CHECK (type IN ('report','reply')),
@@ -60,6 +60,10 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
     );
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
     PRAGMA user_version=${VERSION};`);
+  // Cases saved before each breast could have its own case get the two new columns.
+  const columns = db.prepare('PRAGMA table_info(cases)').all().map(c => c.name);
+  if (!columns.includes('side')) db.exec('ALTER TABLE cases ADD COLUMN side TEXT');
+  if (!columns.includes('group_id')) db.exec('ALTER TABLE cases ADD COLUMN group_id TEXT');
 
   // One change, one transaction. Nested calls join the outer transaction.
   let depth = 0;
@@ -108,6 +112,11 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
     };
   }
 
+  // The patient's other cases: one per breast when a report assessed each breast separately.
+  function groupTracks(row) {
+    if (!row || !row.group_id) return [];
+    return db.prepare('SELECT * FROM cases WHERE group_id=? AND id!=? ORDER BY created_at,rowid').all(row.group_id, row.id);
+  }
   function get(id, today) {
     const row = db.prepare('SELECT * FROM cases WHERE id=?').get(id);
     if (!row) return null;
@@ -117,8 +126,9 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
     const reports = inputs.filter(i => i.type === 'report'), replies = inputs.filter(i => i.type === 'reply');
     const latest = reports[reports.length - 1] || {};
     return {
-      id: row.id, patient: row.patient, status: row.status, pathway: row.pathway, due: row.due, nextAction: row.next_action,
+      id: row.id, patient: row.patient, side: row.side, groupId: row.group_id, status: row.status, pathway: row.pathway, due: row.due, nextAction: row.next_action,
       createdAt: row.created_at, updatedAt: row.updated_at,
+      tracks: groupTracks(row).map(t => { const s = json(t.state_json); return { id: t.id, side: t.side, status: t.status, step: s && s.step ? s.step.name : null, due: t.due, outcome: s && s.closed ? s.closed.outcome : null }; }),
       report: latest.text, read: latest.read || null, model: latest.model || null, readerMode: latest.readerMode || null, problems: latest.problems || [],
       agent: day ? agentView(c, day) : null, reports, replies,
       messages: db.prepare('SELECT id,channel,body,created_at AS createdAt FROM messages WHERE case_id=? ORDER BY created_at,rowid').all(id),
@@ -129,16 +139,16 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
   }
 
   return {
-    transaction, get, setAside,
+    transaction, get, setAside, groupTracks,
     close() { db.close(); },
     setting(key, fallback) { const row = db.prepare('SELECT value FROM settings WHERE key=?').get(key); return row ? row.value : fallback; },
     setSetting(key, value) { db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, String(value)); },
     caseRow(id) { return db.prepare('SELECT * FROM cases WHERE id=?').get(id); },
     review(id) { return db.prepare('SELECT * FROM reviews WHERE id=?').get(id); },
     list(today) {
-      return db.prepare('SELECT id,patient,status,pathway,due,next_action,state_json,last_day,created_at,updated_at FROM cases ORDER BY created_at DESC,rowid DESC').all().map(row => {
+      return db.prepare('SELECT id,patient,side,group_id,status,pathway,due,next_action,state_json,last_day,created_at,updated_at FROM cases ORDER BY created_at DESC,rowid DESC').all().map(row => {
         const c = json(row.state_json), day = today || (row.last_day !== null ? A.dateOf(row.last_day) : null), view = day ? agentView(c, day) : null;
-        return { id: row.id, patient: row.patient, status: row.status, pathway: row.pathway, due: row.due, nextAction: row.next_action,
+        return { id: row.id, patient: row.patient, side: row.side, groupId: row.group_id, status: row.status, pathway: row.pathway, due: row.due, nextAction: row.next_action,
           step: view ? view.step : null, category: view ? view.category : null, overdueDays: view ? view.overdueDays : 0, booked: view && view.booked ? view.booked.appt : null,
           person: view && view.person ? view.person.who : null, outcome: view ? view.outcome : null, resolvedDays: view ? view.resolvedDays : null,
           openReviews: db.prepare("SELECT COUNT(*) AS n FROM reviews WHERE case_id=? AND status='open'").get(row.id).n,
@@ -163,6 +173,24 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
       });
     },
     create(patient, text, requestKey, now) { return this.createCase(patient, text, requestKey, now); },
+    // A second case for the same patient that follows one breast. Both cases share a group.
+    createTrack(row, side, now) {
+      return transaction(() => {
+        const group = row.group_id || row.id;
+        if (!row.group_id) db.prepare('UPDATE cases SET group_id=? WHERE id=?').run(group, row.id);
+        const id = randomUUID();
+        db.prepare("INSERT INTO cases(id,patient,status,side,group_id,created_at,updated_at) VALUES(?,?,'queued',?,?,?,?)").run(id, row.patient, side, group, now, now);
+        event(id, 'system', 'case_split', `Opened for the ${side} breast, which the report assessed separately. The other breast has its own case.`, null, now);
+        return id;
+      });
+    },
+    // The report that gave this breast its own assessment, saved in this case with that breast's read.
+    copyReport(caseId, report, now) {
+      const id = randomUUID();
+      db.prepare("INSERT INTO inputs(id,case_id,type,intake_key,text,status,read_json,model,reader_mode,created_at,updated_at) VALUES(?,?,'report',?,?,'read',?,?,?,?,?)")
+        .run(id, caseId, `${caseId}:split:${randomUUID()}`, report.text, JSON.stringify(report.read), report.model || null, report.mode || null, now, now);
+      return id;
+    },
     pending() { return db.prepare("SELECT COUNT(*) AS n FROM inputs WHERE status IN ('queued','reading')").get().n; },
     lastEvent() { return db.prepare('SELECT COALESCE(MAX(seq),0) AS n FROM events').get().n; },
     addInput(caseId, type, text, requestKey, now) {
@@ -266,9 +294,9 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
         db.prepare("UPDATE reviews SET status='done',resolution=?,resolved_at=? WHERE id=?").run(keep && newHandoff ? 'Replaced by a newer handoff' : resolution || 'Resolved', now, r.id);
       }
       const coming = comingUp(c, today);
-      db.prepare('UPDATE cases SET status=?,pathway=?,due=?,next_action=?,state_json=?,last_day=?,updated_at=? WHERE id=?')
+      db.prepare('UPDATE cases SET status=?,pathway=?,due=?,next_action=?,state_json=?,last_day=?,side=?,updated_at=? WHERE id=?')
         .run(caseStatus(c, today), c.step ? c.step.kind : c.started ? 'pathology' : null, c.step ? c.step.due || null : null,
-          coming.length ? coming[0].date : null, JSON.stringify(c), lastDay, now, row.id);
+          coming.length ? coming[0].date : null, JSON.stringify(c), lastDay, c.side || row.side || null, now, row.id);
     },
 
     reset() {

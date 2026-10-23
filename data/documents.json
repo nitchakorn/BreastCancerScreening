@@ -66,5 +66,13 @@
   {
     "id": "P9-dx", "patient": "P9", "kind": "imaging", "title": "Diagnostic mammogram and ultrasound", "date": "2026-09-29",
     "text": "EXAM: Diagnostic mammogram, left breast, with spot compression views. Targeted left breast ultrasound.\nDATE: 09/29/2026\nINDICATION: Recall from screening 09/22/2026 for a possible left breast mass.\nFINDINGS: Spot compression views of the left breast at 2 o'clock show the finding disperses, consistent with overlapping fibroglandular tissue. Targeted ultrasound at 2 o'clock shows normal fibroglandular tissue without a mass.\nIMPRESSION: No mammographic or sonographic abnormality. BI-RADS 1: Negative.\nRECOMMENDATION: Return to annual screening."
+  },
+  {
+    "id": "P10-dx", "patient": "P10", "kind": "imaging", "title": "Diagnostic mammogram and ultrasound", "date": "2026-09-08",
+    "text": "EXAM: Bilateral diagnostic mammogram. Bilateral targeted breast ultrasound.\nDATE: 09/08/2026\nINDICATION: 68-year-old woman recalled from screening on 09/01/2026 for findings in both breasts.\nCOMPARISON: 08/28/2025.\nFINDINGS: Right breast: at 10 o'clock, 4 cm from the nipple, there is a 1.2 cm oval hypoechoic mass with indistinct margins, new since the prior exam. Left breast: at 2 o'clock, 3 cm from the nipple, there is a 6 mm oval circumscribed hypoechoic mass parallel to the skin, without suspicious features.\nIMPRESSION:\n1. Right breast mass at 10 o'clock. BI-RADS 4A: Low suspicion for malignancy.\n2. Left breast mass at 2 o'clock, probably benign. BI-RADS 3: Probably benign.\nOVERALL ASSESSMENT: BI-RADS 4A.\nRECOMMENDATION: Ultrasound-guided core needle biopsy of the right breast mass. Follow-up ultrasound of the left breast in 6 months."
+  },
+  {
+    "id": "P10-path", "patient": "P10", "kind": "pathology", "title": "Pathology report", "date": "2026-09-18",
+    "text": "SURGICAL PATHOLOGY REPORT\nSPECIMEN: Right breast, 10 o'clock, ultrasound-guided core needle biopsy\nPROCEDURE DATE: 09/15/2026\nDIAGNOSIS: Fibroadenoma. Negative for atypia and malignancy.\nCOMMENT: Findings discussed with the breast imaging team for radiology-pathology correlation."
   }
 ]

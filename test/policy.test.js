@@ -46,3 +46,27 @@ test('BI-RADS 6 is explicitly held because this demo has no automated pathway',(
   const read=recordedRead(sample.text); read.birads='6';read.quotes.birads=read.quotes.birads.replace('BI-RADS 0','BI-RADS 6');
   assert.equal(decide(text,read,today).status,'needs_review');
 });
+
+test('a report that assesses each breast separately is followed breast by breast, most urgent first',()=>{
+  const doc=examples(today).find(s=>s.id==='P10-dx');
+  const result=decide(doc.text,recordedRead(doc.text),today);
+  assert.equal(result.pathway,'biopsy');
+  assert.match(result.message,/for your right breast/);
+});
+
+test('a per-breast assessment whose quote is not in the report holds the whole report for a radiologist',()=>{
+  const doc=examples(today).find(s=>s.id==='P10-dx');
+  const read=recordedRead(doc.text);
+  read.breasts[1].quotes.birads='BI-RADS 2: Benign.';
+  const result=decide(doc.text,read,today);
+  assert.equal(result.status,'needs_review');
+  assert.equal(result.message,null);
+  assert.match(result.review,/left breast's BI-RADS quote does not match/);
+});
+
+test('two assessments for the same breast are held too',()=>{
+  const doc=examples(today).find(s=>s.id==='P10-dx');
+  const read=recordedRead(doc.text);
+  read.breasts[1].side='right';
+  assert.equal(decide(doc.text,read,today).status,'needs_review');
+});

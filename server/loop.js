@@ -13,13 +13,24 @@ function createLoop(store) {
       const row = store.caseRow(caseId);
       if (!row) throw httpError(404, 'Case not found.');
       const c = row.state_json ? JSON.parse(row.state_json) : A.newCase({ id: row.id, name: row.patient, first: P.firstName(row.patient) });
-      const events = [];
-      const engine = A.createEngine({ log: e => events.push(e), check: options.check });
+      const events = [], splits = [];
+      const engine = A.createEngine({
+        log: e => events.push(e), check: options.check,
+        side: (c, side, read, doc) => splits.push({ side, read, doc }),
+        openTracks: () => store.groupTracks(row).map(t => t.state_json && JSON.parse(t.state_json)).filter(t => t && t.started && !t.closed)
+      });
       const day = row.last_day === null ? A.dayOf(today) : Math.max(A.dayOf(today), row.last_day);
       if (row.last_day !== null) for (let d = row.last_day + 1; d < day; d++) engine.tick(c, d);
       const result = work ? work(engine, c, day) : undefined;
       if (c.started) engine.tick(c, day);
       store.saveCase(row, c, day, A.dateOf(day), now, events, options.resolution);
+      // The report gave another breast its own assessment: that breast is followed in its own case.
+      for (const split of splits) {
+        const open = store.groupTracks(store.caseRow(caseId)).find(t => t.side === split.side && t.status !== 'closed');
+        const id = open ? open.id : store.createTrack(store.caseRow(caseId), split.side, now);
+        const inputId = store.copyReport(id, { text: split.doc.text, read: split.read, model: options.model, mode: options.mode }, now);
+        step(id, today, now, (e, t, d) => e.onDoc(t, P.docFor({ id: inputId, text: split.doc.text }, split.read), split.read, d, { split: true }), { resolution: 'A new report came in' });
+      }
       return result;
     });
   }
@@ -40,7 +51,7 @@ function createLoop(store) {
         let problems = [];
         step(input.case_id, today, now, (engine, c, day) => {
           engine.onDoc(c, P.docFor(input, result.read), result.read, day);
-        }, { check: (doc, read) => (problems = P.checkReport(input.text, read, today)), resolution: 'A new report came in' });
+        }, { check: (doc, read) => (problems = P.checkReport(input.text, read, today)), resolution: 'A new report came in', model: result.model, mode: result.mode });
         store.inputProblems(input.id, problems);
       } else {
         step(input.case_id, today, now, (engine, c, day) => engine.onReply(c, { id: input.id, text: input.text }, result.read, day), { resolution: 'She replied' });

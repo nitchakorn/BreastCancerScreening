@@ -18,6 +18,8 @@
 (function (root) {
   "use strict";
 
+  // The deadlines and outreach timings below are placeholders for clinical review.
+  // A health system's clinicians would set the real ones.
   var RULES = {
     start: "2026-09-01",
     days: 90,
@@ -94,6 +96,16 @@
       if (q[k] && doc.text.indexOf(q[k]) < 0) problems.push("The quote for " + k.replace("_", " ") + " is not in the report word for word.");
     });
     if (r.mismatch_quote && doc.text.indexOf(r.mismatch_quote) < 0) problems.push("The quote for the conflicting finding is not in the report word for word.");
+    var seen = {};
+    (Array.isArray(r.breasts) ? r.breasts : []).forEach(function (b) {
+      if (!b || (b.side !== "left" && b.side !== "right")) { problems.push("A per-breast assessment doesn't say which breast."); return; }
+      if (seen[b.side]) problems.push("The " + b.side + " breast has two assessments.");
+      seen[b.side] = true;
+      var bq = b.quotes || {};
+      if (!bq.birads || doc.text.indexOf(bq.birads) < 0) problems.push("The quote for the " + b.side + " breast's BI-RADS is not in the report word for word.");
+      if (bq.next_step && doc.text.indexOf(bq.next_step) < 0) problems.push("The quote for the " + b.side + " breast's next step is not in the report word for word.");
+      if (!normBirads(b.birads)) problems.push("No BI-RADS category for the " + b.side + " breast.");
+    });
     if (doc.kind === "pathology") {
       if (!r.pathology_result) problems.push("No pathology result is stated.");
       return problems;
@@ -112,20 +124,50 @@
     return s;
   }
 
+  /* ---------- which breast ---------- */
+  // The breast the next step is for, in the report's own quoted words when they name one side.
+  function followSide(r) {
+    var q = (r.quotes && r.quotes.next_step) || r.next_step || "";
+    var right = /\bright\b/i.test(q), left = /\bleft\b/i.test(q);
+    if (right !== left) return right ? "right" : "left";
+    return r.side === "left" || r.side === "right" || r.side === "both" ? r.side : null;
+  }
+  var URGENCY = { biopsy: 0, diagnostic: 1, shortInterval: 2, routine: 3 };
+  // When a report gives each breast its own assessment: one entry per breast, most urgent first.
+  function perBreast(r) {
+    var list = (r && Array.isArray(r.breasts) ? r.breasts : []).filter(function (b) { return b && (b.side === "left" || b.side === "right"); });
+    if (list.length < 2 || list[0].side === list[1].side) return [];
+    var rank = function (b) { var p = pathwayFor(normBirads(b.birads)); return p in URGENCY ? URGENCY[p] : -1; };
+    return list.slice().sort(function (a, b) { return rank(a) - rank(b); });
+  }
+  // What Claude read about one breast, in the same shape as a whole read.
+  function sideRead(r, b) {
+    var out = {}, q = {};
+    Object.keys(r).forEach(function (k) { out[k] = r[k]; });
+    Object.keys(r.quotes || {}).forEach(function (k) { q[k] = r.quotes[k]; });
+    q.birads = (b.quotes && b.quotes.birads) || null;
+    q.next_step = (b.quotes && b.quotes.next_step) || null;
+    out.side = b.side; out.birads = b.birads; out.next_step = b.next_step || null; out.quotes = q; out.breasts = [];
+    return out;
+  }
+
   /* ---------- messages (wording approved once, before launch) ---------- */
   function message(kind, c, extra) {
     var f = c.patient.first;
     extra = extra || {};
+    // When each breast has its own track, every message says which breast it is about.
+    var side = c.sideSource === "assessment" && (c.side === "left" || c.side === "right") ? c.side : null;
+    var forSide = side ? " for your " + side + " breast" : "";
     switch (kind) {
-      case "book_imaging": return "Hi " + f + ", this is Riverside Breast Center. Your care team would like you to come back for more imaging. You can book here: " + RULES.link + ". Reply to this text if you have questions or need help getting here.";
-      case "book_biopsy": return "Hi " + f + ", this is Riverside Breast Center. Your care team asked us to help you schedule the appointment they discussed with you. You can book here: " + RULES.link + ". We can help with a ride, directions and what to expect. Reply anytime.";
-      case "book_6mo": return "Hi " + f + ", this is Riverside Breast Center. Your 6-month follow-up imaging is due " + fmt(extra.due) + ". You can book here: " + RULES.link + ". Reply if you need help.";
-      case "portal": return "Patient portal message: Please schedule your follow-up appointment at Riverside Breast Center. Book online at " + RULES.link + " or call " + RULES.phone + ".";
-      case "call": return "Automated call asking her to book her follow-up appointment, with an option to press 1 to reach the scheduling team.";
-      case "nudge": return "Hi " + f + ", checking in. You can still book your follow-up here: " + RULES.link + ". Reply if something is getting in the way.";
+      case "book_imaging": return "Hi " + f + ", this is Riverside Breast Center. Your care team would like you to come back for more imaging" + (side ? " of your " + side + " breast" : "") + ". You can book here: " + RULES.link + ". Reply to this text if you have questions or need help getting here.";
+      case "book_biopsy": return "Hi " + f + ", this is Riverside Breast Center. Your care team asked us to help you schedule the appointment they discussed with you" + forSide + ". You can book here: " + RULES.link + ". We can help with a ride, directions and what to expect. Reply anytime.";
+      case "book_6mo": return "Hi " + f + ", this is Riverside Breast Center. Your 6-month follow-up imaging" + forSide + " is due " + fmt(extra.due) + ". You can book here: " + RULES.link + ". Reply if you need help.";
+      case "portal": return "Patient portal message: Please schedule your follow-up appointment" + forSide + " at Riverside Breast Center. Book online at " + RULES.link + " or call " + RULES.phone + ".";
+      case "call": return "Automated call asking her to book her follow-up appointment" + (side ? " for her " + side + " breast" : "") + ", with an option to press 1 to reach the scheduling team.";
+      case "nudge": return "Hi " + f + ", checking in. You can still book your follow-up" + forSide + " here: " + RULES.link + ". Reply if something is getting in the way.";
       case "transport": return "We can set up a free ride to and from your appointment. Book it here: " + RULES.rideLink + ", or reply RIDE and we'll arrange it.";
       case "slots": return "Here are other open times: Mon 9:00, Wed 1:30, Fri 10:15. Reply with the one that works.";
-      case "appt_reminder": return "Reminder: your appointment at Riverside Breast Center is tomorrow, " + weekday(extra.appt) + " " + fmtShort(extra.appt) + ". Reply if you need a ride or a different time.";
+      case "appt_reminder": return "Reminder: your appointment" + forSide + " at Riverside Breast Center is tomorrow, " + weekday(extra.appt) + " " + fmtShort(extra.appt) + ". Reply if you need a ride or a different time.";
     }
     return "";
   }
@@ -138,10 +180,13 @@
       hooks.log(event, c)               records what happened
       hooks.world(c, when, day, ctx)    lets the simulated world react (the workspace has no script)
       hooks.check(doc, read)            returns problems with Claude's read (default: checkRead)
+      hooks.side(c, side, read, doc, day)   a report gave another breast its own assessment: follow it on its own track
+      hooks.openTracks(c)               the patient's other tracks that are still open
+    A case follows one patient, or one breast of a patient when a report assesses each breast separately.
   */
   function newCase(patient) {
     return { patient: patient, started: false, closed: null, person: null, booked: null, step: null, openCat: null, openDate: null,
-      resolvedDay: null, neededPerson: false, used: {}, lastAgent: null, birads: null, bi3: null };
+      resolvedDay: null, neededPerson: false, used: {}, lastAgent: null, birads: null, bi3: null, side: null, sideSource: null, multi: false };
   }
 
   function createEngine(hooks) {
@@ -152,6 +197,8 @@
     function log(c, day, actor, kind, text, extra) {
       var e = { day: day, date: dateOf(day), patient: c.patient.id, actor: actor, kind: kind, text: text };
       if (extra) Object.keys(extra).forEach(function (k) { e[k] = extra[k]; });
+      if (c.side) e.side = c.side;
+      if (c.track) e.track = c.track;
       if (hooks.log) hooks.log(e, c);
       if (actor === "agent" && e.short) c.lastAgent = e.short;
       return e;
@@ -174,7 +221,15 @@
       c.closed = { day: day, outcome: outcome };
       if (c.person && c.person.kind !== "surgery") c.person = null;
       if ((c.openCat === "0" || c.openCat === "4-5" || c.openCat === "unclear") && c.resolvedDay === null) c.resolvedDay = day;
-      log(c, day, "agent", "close", "Case closed. " + outcome, { short: short });
+      log(c, day, "agent", "close", "Case closed" + (c.multi ? " for the " + c.side + " breast" : "") + ". " + outcome, { short: short });
+      stillOpen(c, day);
+    }
+    // When one breast's case closes, say which other breast is still being followed. Nothing closes for her while it is.
+    function stillOpen(c, day) {
+      (hooks.openTracks ? hooks.openTracks(c) : []).forEach(function (t) {
+        var s = t.step;
+        log(c, day, "agent", "note", "The " + t.side + " breast is still open: " + (s ? s.name.toLowerCase() + (s.due ? ", due " + fmt(s.due) : "") : "follow-up") + ". The agent keeps following it.", { short: "The " + t.side + " breast is still open" });
+      });
     }
 
     function openUrgentStep(c, day, kind, exam, docId) {
@@ -203,25 +258,48 @@
 
     function onDoc(c, doc, r, day, opts) {
       opts = opts || {};
-      var first = !c.started;
+      var first = !c.started, others = [];
       c.started = true;
-      log(c, day, "system", "doc", (opts.source ? opts.source + ". " : "") + doc.title + " arrived.", { doc: doc.id });
-      log(c, day, "agent", "read", "Claude read the " + doc.title.toLowerCase() + ": " + summarizeRead(doc, r) + ".", { doc: doc.id, short: "Read the " + doc.title.toLowerCase() });
-      var problems = check(doc, r);
-      if (problems.length) {
-        log(c, day, "agent", "check", "Check failed. " + problems.join(" "), { doc: doc.id, ok: false });
-        if (first) { c.openCat = "unclear"; c.openDate = (r && r.exam_date) || doc.date; }
-        c.step = { kind: "review", name: "Radiologist review", due: null };
-        handoff(c, day, "Radiologist", "The report is unclear, so the case stops here until a radiologist looks at it.", "Held for a radiologist: report unclear", "hold");
-        return;
+      if (opts.split) {
+        // Another case's report gave this breast its own assessment. The checks already ran on the whole report.
+        c.multi = true; c.sideSource = "assessment"; c.side = r.side;
+        log(c, day, "agent", "split", "Following the " + r.side + " breast on its own: " + summarizeRead(doc, r) + ".", { doc: doc.id, short: "Started a separate case for the " + r.side + " breast" });
+      } else {
+        log(c, day, "system", "doc", (opts.source ? opts.source + ". " : "") + doc.title + " arrived.", { doc: doc.id });
+        log(c, day, "agent", "read", "Claude read the " + doc.title.toLowerCase() + ": " + summarizeRead(doc, r) + ".", { doc: doc.id, short: "Read the " + doc.title.toLowerCase() });
+        var problems = check(doc, r);
+        if (problems.length) {
+          log(c, day, "agent", "check", "Check failed. " + problems.join(" "), { doc: doc.id, ok: false });
+          if (first) { c.openCat = "unclear"; c.openDate = (r && r.exam_date) || doc.date; }
+          c.step = { kind: "review", name: "Radiologist review", due: null };
+          handoff(c, day, "Radiologist", "The report is unclear, so the case stops here until a radiologist looks at it.", "Held for a radiologist: report unclear", "hold");
+          return;
+        }
+        log(c, day, "agent", "check", "Checks passed. Every quote matches the report word for word" + (doc.kind === "pathology" ? "." : ", and the findings fit the impression."), { doc: doc.id, ok: true });
+        if (c.person && c.person.kind === "hold") {
+          c.person = null;
+          log(c, day, "agent", "note", "The radiologist's correction passed the checks. The agent picks the case back up.", { short: "Picked the case back up" });
+        }
+        if (doc.kind === "pathology") return onPathology(c, doc, r, day);
+        // A report that gives each breast its own assessment: this case follows one breast, and each other breast gets a case of its own.
+        var sides = perBreast(r);
+        if (sides.length) {
+          var mine = (c.sideSource === "assessment" && sides.filter(function (s) { return s.side === c.side; })[0]) || sides[0];
+          c.multi = true; c.sideSource = "assessment"; c.side = mine.side;
+          log(c, day, "agent", "split", "This report gives each breast its own assessment, so each breast gets its own case. This one follows the " + mine.side + " breast (BI-RADS " + mine.birads + ").", { doc: doc.id, short: "Split the report by breast" });
+          others = sides.filter(function (s) { return s !== mine; }).map(function (s) { return sideRead(r, s); });
+          r = sideRead(r, mine);
+        } else if (c.sideSource !== "assessment") c.side = followSide(r);
       }
-      log(c, day, "agent", "check", "Checks passed. Every quote matches the report word for word" + (doc.kind === "pathology" ? "." : ", and the findings fit the impression."), { doc: doc.id, ok: true });
-      if (c.person && c.person.kind === "hold") {
-        c.person = null;
-        log(c, day, "agent", "note", "The radiologist's correction passed the checks. The agent picks the case back up.", { short: "Picked the case back up" });
-      }
-      if (doc.kind === "pathology") return onPathology(c, doc, r, day);
+      followUp(c, doc, r, day, first);
+      others.forEach(function (sr) {
+        if (pathwayFor(normBirads(sr.birads)) === "routine") log(c, day, "agent", "note", "The " + sr.side + " breast is BI-RADS " + sr.birads + ", so that side needs no follow-up.", { short: "No follow-up needed on the " + sr.side });
+        else if (hooks.side) hooks.side(c, sr.side, sr, doc, day);
+      });
+    }
 
+    // The pathway, the due date and the first step for what this case follows.
+    function followUp(c, doc, r, day, first) {
       var b = normBirads(r.birads), pw = pathwayFor(b), exam = r.exam_date || doc.date;
       c.birads = r.birads;
       if (first) { c.openCat = catOf(b); c.openDate = exam; }
@@ -327,6 +405,7 @@
       c.person = null;
       c.closed = { day: day, outcome: outcome, by: who };
       log(c, day, "person", "close", "Case closed by the " + who.toLowerCase() + ". " + outcome, { who: who });
+      stillOpen(c, day);
     }
 
     function tick(c, day) {
@@ -386,7 +465,7 @@
         booked: c.booked ? c.booked.appt : null,
         lastAgent: c.lastAgent, outcome: c.closed ? c.closed.outcome : null,
         resolvedDays: c.resolvedDay !== null ? c.resolvedDay - dayOf(c.openDate) : null,
-        neededPerson: c.neededPerson, bi3: c.bi3 ? { onTime: c.bi3.onTime } : null
+        neededPerson: c.neededPerson, bi3: c.bi3 ? { onTime: c.bi3.onTime } : null, side: c.side
       };
     }
 
@@ -401,6 +480,9 @@
     input.replies.forEach(function (r) { repliesById[r.id] = r; });
     var reads = input.reads;
     var events = [], agenda = {}, cases = {}, snapshots = [];
+    // Each patient has one case, plus one more per breast when a report assesses each breast separately.
+    var tracksOf = {}, trackByKey = {}, lastAgentOf = {};
+    var RANK = { overdue: 0, person: 1, agent: 2, booked: 3, done: 4, waiting: 5 };
 
     function schedule(day, item) { (agenda[day] = agenda[day] || []).push(item); }
 
@@ -408,28 +490,56 @@
     function trigger(c, when, day, ctx) {
       (c.patient.reactions || []).forEach(function (r, i) {
         if (c.used[i] || r.when !== when) return;
+        if (r.side && r.side !== c.side) return;
         if (r.doc && when === "outreach" && (!ctx || ctx.doc !== r.doc)) return;
         c.used[i] = true;
         var d = day + (r.after || 0);
-        if (r.person) { schedule(d, { type: "person", patient: c.patient.id, react: r }); return; }
-        if (r.reply) schedule(d, { type: "reply", patient: c.patient.id, reply: r.reply });
-        if (r.book) schedule(d, { type: "book", patient: c.patient.id, book: r.book });
+        if (r.person) { schedule(d, { type: "person", patient: c.patient.id, track: c.track, react: r }); return; }
+        if (r.reply) schedule(d, { type: "reply", patient: c.patient.id, track: c.track, reply: r.reply });
+        if (r.book) schedule(d, { type: "book", patient: c.patient.id, track: c.track, book: r.book });
       });
     }
 
     var engine = createEngine({
-      log: function (e) { events.push(e); },
+      log: function (e) { events.push(e); if (e.actor === "agent" && e.short) lastAgentOf[e.patient] = e.short; },
       world: function (c, when, day, ctx) {
         // After an appointment the result report arrives: the same day for imaging, later for pathology.
-        if (when === "appt") { var b = ctx.booking; schedule(day + (b.kind === "biopsy" ? b.resultAfter : 0), { type: "doc", patient: c.patient.id, doc: b.result }); return; }
+        if (when === "appt") { var b = ctx.booking; schedule(day + (b.kind === "biopsy" ? b.resultAfter : 0), { type: "doc", patient: c.patient.id, track: c.track, doc: b.result }); return; }
         trigger(c, when, day, ctx);
-      }
+      },
+      side: function (c, side, read, doc, day) {
+        var list = tracksOf[c.patient.id];
+        var t = list.filter(function (x) { return x !== c && x.side === side && !x.closed; })[0];
+        if (!t) { t = newCase(c.patient); t.track = c.patient.id + ":" + side; list.push(t); trackByKey[t.track] = t; }
+        engine.onDoc(t, doc, read, day, { split: true });
+      },
+      openTracks: function (c) { return tracksOf[c.patient.id].filter(function (x) { return x !== c && x.started && !x.closed; }); }
     });
 
     input.patients.forEach(function (p) {
-      cases[p.id] = newCase(p);
+      var c = cases[p.id] = newCase(p);
+      c.track = p.id;
+      tracksOf[p.id] = [c];
+      trackByKey[p.id] = c;
       schedule(Math.max(0, dayOf(p.arrives)), { type: "doc", patient: p.id, doc: p.first_doc, first: true });
     });
+
+    // One row per patient. She is only done when every breast is done, and her row shows the most urgent open breast.
+    function patientSnapshot(p, day) {
+      var list = tracksOf[p.id], s = engine.snapshot(list[0], day);
+      s.lastAgent = lastAgentOf[p.id] || null;
+      var started = list.filter(function (t) { return t.started; });
+      if (started.length > 1) {
+        s.tracks = started.map(function (t) { return engine.snapshot(t, day); });
+        var live = s.tracks.filter(function (t) { return t.status !== "done"; }).sort(function (a, b) { return RANK[a.status] - RANK[b.status]; });
+        if (live.length) {
+          ["status", "step", "due", "overdueDays", "person", "personKind", "booked"].forEach(function (k) { s[k] = live[0][k]; });
+          s.outcome = null;
+        }
+        s.neededPerson = list.some(function (t) { return t.neededPerson; });
+      }
+      return s;
+    }
 
     function onPerson(c, item, day) {
       var r = item.react;
@@ -443,18 +553,18 @@
       var guard = 0;
       do {
         while (agenda[day] && agenda[day].length) {
-          var it = agenda[day].shift(), c = cases[it.patient];
+          var it = agenda[day].shift(), c = (it.track && trackByKey[it.track]) || cases[it.patient];
           if (it.type === "doc") engine.onDoc(c, docsById[it.doc], reads.documents[it.doc], day, { source: it.first ? c.patient.source : null });
           else if (it.type === "reply") engine.onReply(c, repliesById[it.reply], reads.replies[it.reply], day);
           else if (it.type === "book") engine.onBook(c, it.book, day, false);
           else if (it.type === "person") onPerson(c, it, day);
         }
-        input.patients.forEach(function (p) { engine.tick(cases[p.id], day); });
+        input.patients.forEach(function (p) { tracksOf[p.id].forEach(function (t) { engine.tick(t, day); }); });
         guard++;
       } while (agenda[day] && agenda[day].length && guard < 20);
 
       var snap = {};
-      input.patients.forEach(function (p) { snap[p.id] = engine.snapshot(cases[p.id], day); });
+      input.patients.forEach(function (p) { snap[p.id] = patientSnapshot(p, day); });
       snapshots.push(snap);
     }
     return { events: events, snapshots: snapshots };
@@ -462,6 +572,7 @@
 
   var api = { RULES: RULES, EXCEPTIONS: EXCEPTIONS, TEMPLATES: TEMPLATES, simulate: simulate, createEngine: createEngine, newCase: newCase,
     checkRead: checkRead, summarizeRead: summarizeRead, normBirads: normBirads, pathwayFor: pathwayFor, catOf: catOf,
+    followSide: followSide, perBreast: perBreast, sideRead: sideRead,
     addDays: addDays, addMonths: addMonths, dayOf: dayOf, dateOf: dateOf, fmt: fmt, fmtShort: fmtShort, weekday: weekday, message: message };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.BreastAgent = api;
 })(this);

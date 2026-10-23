@@ -1,10 +1,18 @@
 # Breast Screening Follow-up Agent
 
-A small working agent that makes sure no woman with an abnormal mammogram gets lost before her result is resolved.
+## The problem
 
-Claude reads each breast imaging report, pathology report and patient text reply. Plain code checks those reads, picks the pathway, sets the deadline, decides every follow-up, and hands a case to a person only when a rule says so. A day-by-day simulation shows the agent working nine made-up patients over 90 days.
+Women with an abnormal mammogram sometimes get lost before follow-up, especially older women. Sometimes the finding is in both breasts and she only hears about one side. Sometimes the message gets lost between the radiologist, her doctor and her.
 
-**Live demo:** turn on GitHub Pages for this repo (Settings, then Pages, then deploy from the `main` branch and the `/docs` folder). The page will be at `https://nitchakorn.github.io/BreastCancerScreening/`.
+## What the agent does
+
+This agent follows every finding, on each side, until it's resolved.
+
+Claude reads each breast imaging report, pathology report and patient text reply. Plain code checks those reads, picks the pathway, sets the deadline, decides every follow-up, and hands a case to a person only when a rule says so. When a report gives each breast its own assessment, each breast gets its own case with its own deadline, so a finding on one side can't hide the other. A day-by-day simulation shows the agent working ten made-up patients over 90 days.
+
+The deadlines in this demo are placeholders for clinical review. A health system's clinicians would set the real ones.
+
+**Live demo:** [nitchakorn.github.io/BreastCancerScreening](https://nitchakorn.github.io/BreastCancerScreening/), served by GitHub Pages from the `/docs` folder on `main`.
 
 **Try the agent yourself:** `workspace.html` on the same site (`https://nitchakorn.github.io/BreastCancerScreening/workspace.html`) runs the local workspace in your browser, with nothing to install. Give it a report, reply as the patient, book an appointment and move the clock forward.
 
@@ -14,7 +22,7 @@ This is a demo with synthetic patients. It sends no real messages, books nothing
 
 The workspace runs the same agent on cases you create. Give it a report and it follows up the way the simulation does: a text, a portal message and an automated call, replies read by Claude, bookings, a reminder the day before, and the next report until the result is resolved. People step in through the same handoffs. A demo clock moves time forward, so a month of follow-up takes a few clicks.
 
-The workspace and the simulation share one engine (`createEngine` in `agent/agent.js`). A test replays all nine simulated patients through the workspace and checks that the agent makes the same decisions, 106 of them, on the same days.
+The workspace and the simulation share one engine (`createEngine` in `agent/agent.js`). A test replays all ten simulated patients through the workspace and checks that the agent makes the same decisions, 124 of them, on the same days, for each breast that has its own case.
 
 You need Node.js 22.22 or newer (24.5 or newer also works). There are no npm packages to install.
 
@@ -34,6 +42,7 @@ The public page `docs/workspace.html` is the same workspace running in the brows
 4. Under **Reports**, add **Diagnostic result: benign (BI-RADS 2)**. The case closes and shows how many days it took.
 5. Start a **Biopsy pathway** case and send the reply **Scared, asks for a call**. The case goes to the nurse navigator, who can book for her, hand the case back to the agent, or close it with a note.
 6. Start **Conflicting findings**. It is held for a radiologist. Add the **Radiologist addendum** as the next report and the agent picks the case back up.
+7. Start **Both breasts: biopsy right, 6 months left**. The right breast case starts biopsy outreach, and the left breast gets its own case on the six-month track. **Her other breast** links the two. Book the biopsy and add **Pathology: benign fibroadenoma, right breast**. When the right side closes, the timeline says the left side is still open.
 
 **Start over** clears every case and resets the clock.
 
@@ -42,6 +51,7 @@ The public page `docs/workspace.html` is the same workspace running in the brows
 | You do | The agent does |
 | --- | --- |
 | Start a case with a report | Claude reads it, code checks every quote, and the rules set the pathway, the due date and the day a person takes over |
+| Give it a report that assesses each breast separately | Opens a case for each breast that needs follow-up, each with its own pathway, deadline and messages. The case list and the case page show which breast. Closing one side notes that the other side is still open |
 | Move the clock | Runs its daily check for every day in between: texts, portal messages, calls, check-ins, reminders, overdue notes and handoffs |
 | Reply as the patient | Claude labels the reply and quotes it, and code checks the quote. No ride gets a ride offer, another time gets open slots, and a booking claim gets checked against the schedule. Fear, medical questions, refusals, wrong numbers and unclear replies go to the navigator. While a person has the case, the agent reads her replies but doesn't answer them |
 | Book in the test schedule | Trusts the schedule over what she says, texts a reminder the day before, and marks the appointment done on the day |
@@ -70,15 +80,15 @@ Cases, reports, replies, messages, handoffs and events are stored in `.local/cas
 
 ```sh
 npm test            # everything below, with no model calls
-npm run check       # print the nine-patient simulation
+npm run check       # print the ten-patient simulation
 npm run build       # rebuild docs/index.html
 ```
 
 | Test | What it proves |
 | --- | --- |
 | `test/simulation.test.js` | The simulation prints exactly the saved timelines and summary |
-| `test/parity.test.js` | The workspace makes the same decisions on the same days as the simulation, for all nine patients |
-| `test/loop.test.js` | Outreach, replies, bookings, results, people's actions and the demo clock, through the HTTP API |
+| `test/parity.test.js` | The workspace makes the same decisions on the same days as the simulation, for all ten patients and each breast |
+| `test/loop.test.js` | Outreach, replies, bookings, results, people's actions and the demo clock, through the HTTP API, including a report with findings in both breasts |
 | `test/workflow.test.js` | Intake, duplicates, restarts, retries and request checks |
 | `test/policy.test.js` | A bad read is held for a person instead of messaging her |
 | `test/reader.test.js` | Recorded and live reading, with the API mocked |
@@ -96,9 +106,9 @@ npm run build       # rebuild docs/index.html
 ## How it works
 
 1. **A new report arrives.** This starts the agent.
-2. **Claude reads the report.** It returns the BI-RADS category, which breast, the recommended next step, the exam date and the exact words that support each one.
+2. **Claude reads the report.** It returns the BI-RADS category, which breast needs follow-up, the recommended next step, the exam date and the exact words that support each one. When the report assesses each breast separately, it also returns each breast's category and next step, with quotes.
 3. **Code checks the read.** Every quote must match the report word for word. If the BI-RADS category is missing, or the findings and the impression disagree, the case goes to a radiologist and stops there.
-4. **Rules pick the pathway and set a due date** (table below).
+4. **Rules pick the pathway and set a due date for each breast** (table below). When each breast has its own assessment, each breast gets its own case, and the more urgent side goes first.
 5. **The agent waits and watches.** Each day it checks whether the next step was booked or done.
 6. **If the next step isn't booked, the agent reaches out.** It texts a booking link and checks the schedule. Claude reads her replies. No ride means a free ride option, and another time means new slots. No answer means a portal message, then an automated call.
 7. **A person steps in only for exceptions.** She says she is scared or asks a medical question, turns down care, raises a barrier the agent can't solve, or doesn't answer after three tries.
@@ -109,6 +119,8 @@ Claude never decides what happens next. It only reads and quotes. That keeps eve
 
 ## Pathways and deadlines
 
+These deadlines are placeholders for clinical review. A health system's clinicians would set the real ones.
+
 | BI-RADS | Next step | Due | Agent outreach starts | Goes to a person |
 | --- | --- | --- | --- | --- |
 | 1 or 2 | Routine screening | Next routine screen | None | None |
@@ -117,9 +129,11 @@ Claude never decides what happens next. It only reads and quotes. That keeps eve
 | 4 or 5 | Biopsy | 14 days | As soon as the report is read | Day 7 if not booked, or any exception. For BI-RADS 5 the navigator also gets a heads-up on day 1, but the case doesn't wait on her. |
 | After biopsy | Pathology result | 10 days after biopsy | None. The agent never gives results. | Day 10 if no result |
 
+Each breast with its own assessment follows its own row. Closing one side never closes the other.
+
 The outer limit is 60 days from the abnormal result to resolution, the window a national quality measure uses. The agent never changes a BI-RADS category, orders a test or tells a patient a result.
 
-## The nine demo patients
+## The ten demo patients
 
 | | Path |
 | --- | --- |
@@ -132,8 +146,9 @@ The outer limit is 60 days from the abnormal result to resolution, the window a 
 | P7 | BI-RADS 4. Says she is scared, so a navigator calls her. Benign biopsy, and a person confirms it matches the imaging. |
 | P8 | BI-RADS 5. Books the biopsy right away. Cancer, handed to breast surgery. |
 | P9 | Unclear report: the impression says negative but the findings describe a possible mass. Held for a radiologist, who corrects it. |
+| P10 | Findings in both breasts: BI-RADS 4A on the right, BI-RADS 3 on the left. Books the right-side biopsy from the first text. Benign, and a person confirms it matches the imaging. The right side is resolved in 11 days. The left side stays open on its six-month track, due March 8, 2027, and the agent keeps following it. |
 
-At the end of the 90 days, all six abnormal results are resolved within 60 days (median 8.5 days), and four of nine patients needed a person.
+At the end of the 90 days, all seven abnormal results are resolved within 60 days (median 9 days), four of ten patients needed a person for an exception or an unclear report, and Joyce K.'s left breast is still on its six-month track.
 
 ## Run it yourself
 
@@ -156,7 +171,10 @@ To run the reading step again, you also need [Claude Code](https://claude.com/cl
 ```
 node scripts/read.js         # sends every report and reply to Claude, saves to reads/
 node scripts/read.js --samples   # reads the extra workspace replies only
+node scripts/read.js --only P10-dx,P10-path,P10-r1 --note "what was added"   # reads only those items and adds them to the saved run
 ```
+
+The first 24 reads were recorded on Oct 22, 2026. Joyce K.'s three were recorded on Oct 23 with the updated document prompt, which adds a per-breast list when a report gives each breast its own assessment. The older reports assess one breast or give a single category, so their reads don't have that list and don't need it.
 
 No API key is stored in this repo. The page replays the recorded reads in `reads/`, so it works without one.
 

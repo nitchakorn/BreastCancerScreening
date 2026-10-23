@@ -116,3 +116,13 @@ test('claude-code mode fails clearly when Claude Code errors, is missing or retu
   const missing=createReader({env:{READER_MODE:'claude-code',CLAUDE_CODE_COMMAND:'/no/such/claude'}});
   await assert.rejects(missing.readReply('ok'),e=>e.code==='cli_unavailable');
 });
+
+test('the live report schema asks for a separate assessment for each breast',async()=>{
+  const calls=[];
+  const reader=createReader({env:{READER_MODE:'live',ANTHROPIC_API_KEY:'test-key',ANTHROPIC_MODEL:'test'},fetchImpl:async(url,options)=>{calls.push(JSON.parse(options.body));return response({model:'test',stop_reason:'tool_use',content:[{type:'tool_use',name:'record_report',input:recordedRead(sample.text)}]});}});
+  await reader.read(sample.text);
+  const schema=calls[0].tools[0].input_schema;
+  assert(schema.required.includes('breasts'));
+  assert.deepEqual(schema.properties.breasts.items.properties.side.enum,['left','right']);
+  assert.match(calls[0].system,/its own BI-RADS assessment/);
+});

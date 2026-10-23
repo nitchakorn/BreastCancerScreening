@@ -325,3 +325,51 @@ test('while a person has the case, the agent reads her replies but does not answ
   assert(item.events.some(e => /has this case, so the agent doesn't answer/.test(e.detail)));
   assert.equal(item.reviews.filter(r => r.status === 'open').length, 1);
 });
+
+test('findings in both breasts: each breast gets its own case, and closing one side leaves the other open', async t => {
+  const w = await workspace(t);
+  const right = await w.start('Joyce K.', 'P10-dx');
+  let item = await w.get(right);
+  assert.equal(item.side, 'right');
+  assert.equal(item.agent.step, 'Biopsy');
+  assert.match(item.messages[0].body, /^Hi Joyce, .*the appointment they discussed with you for your right breast\./);
+  assert.equal(item.tracks.length, 1);
+  assert.equal(item.tracks[0].side, 'left');
+  const left = item.tracks[0].id;
+  let other = await w.get(left);
+  assert.equal(other.status, 'waiting_reminder');
+  assert.equal(other.agent.step, '6-month follow-up imaging');
+  assert.equal(other.agent.due, '2027-04-23');
+  assert.equal(other.reports.length, 1, 'the same report, saved with the left breast read');
+  assert.equal(other.reports[0].read.birads, '3');
+  assert.equal(other.messages.length, 0);
+
+  // She books the right biopsy only. The right side resolves; the left stays open.
+  assert.equal((await w.book(right, 3)).status, 200);
+  await w.forward(3);
+  item = await w.next(right, 'P10-path');
+  assert(item.reports[1].text.includes('PROCEDURE DATE: 10/26/2026'));
+  item = (await w.act(right, 'concordance', 'concordant')).body.case;
+  assert.equal(item.status, 'closed');
+  assert(item.events.some(e => e.kind === 'close' && /Case closed for the right breast/.test(e.detail)));
+  assert(item.events.some(e => /The left breast is still open: 6-month follow-up imaging, due Apr 23, 2027/.test(e.detail)));
+  other = await w.get(left);
+  assert.equal(other.status, 'waiting_reminder');
+  assert.equal(other.tracks[0].status, 'closed');
+
+  // Months later the agent reminds her about the left breast by name.
+  for (let i = 0; i < 5; i++) await w.forward(30);
+  other = await w.get(left);
+  assert.match(other.messages[0].body, /Your 6-month follow-up imaging for your left breast is due Apr 23, 2027/);
+  const list = (await w.call('GET', '/api/cases')).body.cases;
+  assert.deepEqual(list.filter(c => c.patient === 'Joyce K.').map(c => c.side).sort(), ['left', 'right']);
+});
+
+test('a single-side report shows the breast named in its own recommendation', async t => {
+  const w = await workspace(t);
+  const id = await w.start('Grace T.', 'P2-screen');
+  const item = await w.get(id);
+  assert.equal(item.read.side, 'both', 'Claude gave the exam side');
+  assert.equal(item.side, 'right', 'the recommendation names the right breast');
+  assert.equal(item.tracks.length, 0);
+});

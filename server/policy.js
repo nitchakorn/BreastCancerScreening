@@ -47,6 +47,26 @@ function checkReport(text, read, now) {
     if (read.findings_match_impression !== true) problems.push('The findings and impression require radiologist review.');
   }
   if (read.doc_type === 'pathology' && !['malignant', 'benign', 'atypia', 'nondiagnostic'].includes(read.pathology_result)) problems.push('A supported pathology result is required.');
+  // A separate assessment for each breast gets the same checks as the whole report.
+  if (read.breasts !== undefined && read.breasts !== null) {
+    if (!Array.isArray(read.breasts)) problems.push('The per-breast assessments must be a list.');
+    else {
+      const seen = new Set();
+      for (const b of read.breasts) {
+        if (!b || typeof b !== 'object' || !['left', 'right'].includes(b.side)) { problems.push('A per-breast assessment does not say which breast.'); continue; }
+        if (seen.has(b.side)) problems.push(`The ${b.side} breast has two assessments.`);
+        seen.add(b.side);
+        const q = b.quotes && typeof b.quotes === 'object' ? b.quotes : {};
+        if (!/^(?:[0-6]|4[ABC])$/.test(String(b.birads))) problems.push(`A supported BI-RADS value is required for the ${b.side} breast.`);
+        if (typeof q.birads !== 'string' || !q.birads.trim() || !text.includes(q.birads)) problems.push(`The ${b.side} breast's BI-RADS quote does not match the report word for word.`);
+        else {
+          const match = q.birads.match(/BI[\s-]*RADS\s*(?:category\s*)?[:\-]?\s*([0-6](?:[ABC])?)\b/i);
+          if (!match || match[1].toUpperCase() !== String(b.birads).toUpperCase()) problems.push(`The ${b.side} breast's BI-RADS quote does not support its category.`);
+        }
+        if (b.next_step && (typeof q.next_step !== 'string' || !q.next_step.trim() || !text.includes(q.next_step))) problems.push(`The ${b.side} breast's recommendation needs a quote that matches the report.`);
+      }
+    }
+  }
   return problems;
 }
 

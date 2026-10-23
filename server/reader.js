@@ -14,13 +14,24 @@ const documentSchema = {
     birads: nullableString, next_step: nullableString,
     findings_match_impression: { type: ['boolean', 'null'] },
     mismatch_quote: nullableString, pathology_result: nullableString, diagnosis: nullableString,
+    breasts: {
+      type: 'array',
+      items: {
+        type: 'object', additionalProperties: false,
+        properties: {
+          side: { type: 'string', enum: ['left', 'right'] }, birads: { type: 'string' }, next_step: nullableString,
+          quotes: { type: 'object', additionalProperties: false, properties: { birads: { type: 'string' }, next_step: nullableString }, required: ['birads', 'next_step'] }
+        },
+        required: ['side', 'birads', 'next_step', 'quotes']
+      }
+    },
     quotes: {
       type: 'object', additionalProperties: false,
       properties: { exam_date: nullableString, birads: nullableString, next_step: nullableString, pathology_result: nullableString },
       required: ['exam_date', 'birads', 'next_step', 'pathology_result']
     }
   },
-  required: ['doc_type', 'exam_date', 'side', 'birads', 'next_step', 'findings_match_impression', 'mismatch_quote', 'pathology_result', 'diagnosis', 'quotes']
+  required: ['doc_type', 'exam_date', 'side', 'birads', 'next_step', 'findings_match_impression', 'mismatch_quote', 'pathology_result', 'diagnosis', 'breasts', 'quotes']
 };
 const REPLY_LABELS = ['booked', 'wants_new_time', 'transport_barrier', 'other_barrier', 'scared_or_worried', 'medical_question', 'declines_care', 'wrong_number', 'other'];
 const replySchema = {

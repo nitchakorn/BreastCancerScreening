@@ -101,7 +101,7 @@ test('BI-RADS 5 creates a navigator heads-up while booking outreach proceeds',as
 test('pathology goes to a person and never delivers a result to the test inbox',async t=>{
   const {app,base}=await fixture(t);
   const expected={'P7-path':['needs_review','concordance'],'P8-path':['closed','surgery']};
-  for (const sample of samples.slice(6)) {
+  for (const sample of samples.filter(item=>item.id.endsWith('-path'))) {
     const saved=await (await submit(base,sample.text)).json();
     await app.runOnce();
     const item=app.store.get(saved.case.id);
@@ -209,7 +209,7 @@ test('HTTP validation rejects invalid bodies, cross-origin writes, oversized rep
   assert.equal(badHostStatus,403);
   assert.equal((await fetch(base+'/server/store.js')).status,404);
   const data=await (await fetch(base+'/api/examples')).json();
-  assert.equal(data.length,8);
+  assert.equal(data.length,9);
   assert(data.every(item=>item.text.includes('DATE: 10/23/2026')));
 });
 

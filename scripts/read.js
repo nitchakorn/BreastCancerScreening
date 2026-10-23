@@ -6,6 +6,8 @@
   Needs Claude Code installed and signed in (the `claude` command).
   Usage: node scripts/read.js              reports and replies used by the simulation
          node scripts/read.js --samples    extra sample replies for the workspace only
+         node scripts/read.js --only P10-dx,P10-r1 --note "what was added"
+                                           reads only those items and adds them to the saved run
 */
 const fs = require("fs");
 const path = require("path");
@@ -24,10 +26,14 @@ const rawDir = path.join(root, "reads/raw");
 fs.mkdirSync(rawDir, { recursive: true });
 
 const replyJob = (r) => ({ id: r.id, kind: "reply", input: replyPrompt + "\n\nHer reply:\n" + r.text });
-const jobs = samplesOnly ? sampleReplies.map(replyJob) : [
+const onlyArg = process.argv.indexOf("--only");
+const only = onlyArg > 0 ? process.argv[onlyArg + 1].split(",") : null;
+const noteArg = process.argv.indexOf("--note");
+const allJobs = samplesOnly ? sampleReplies.map(replyJob) : [
   ...docs.map((d) => ({ id: d.id, kind: "document", input: docPrompt + "\n\nDocument:\n" + d.text })),
   ...replies.map(replyJob),
 ];
+const jobs = only ? allJobs.filter((j) => only.includes(j.id)) : allJobs;
 
 function runOne(job) {
   return new Promise((resolve) => {
@@ -83,7 +89,22 @@ function collect() {
     total_cost_usd: Math.round(cost * 1000) / 1000,
     median_seconds: ms.length ? Math.round(ms[Math.floor(ms.length / 2)] / 100) / 10 : null,
   };
-  if (samplesOnly) {
+  if (only) {
+    // Add these reads to the saved run without touching the others.
+    const merge = (file, add) => {
+      const all = JSON.parse(fs.readFileSync(path.join(root, file), "utf8"));
+      Object.assign(all, add);
+      fs.writeFileSync(path.join(root, file), JSON.stringify(all, null, 2) + "\n");
+    };
+    if (Object.keys(outDocs).length) merge("reads/documents.json", outDocs);
+    if (Object.keys(outReplies).length) merge(samplesOnly ? "reads/sample-replies.json" : "reads/replies.json", outReplies);
+    if (!samplesOnly) {
+      const saved = JSON.parse(fs.readFileSync(path.join(root, "reads/run.json"), "utf8"));
+      saved.added = (saved.added || []).concat([{ date: run.date, ids: jobs.map((j) => j.id), calls: run.calls, total_cost_usd: run.total_cost_usd,
+        model: run.model, note: noteArg > 0 ? process.argv[noteArg + 1] : "" }]);
+      fs.writeFileSync(path.join(root, "reads/run.json"), JSON.stringify(saved, null, 2) + "\n");
+    }
+  } else if (samplesOnly) {
     // Workspace samples are kept apart, so the simulation's recorded run stays exactly as it was.
     fs.writeFileSync(path.join(root, "reads/sample-replies.json"), JSON.stringify(outReplies, null, 2) + "\n");
     fs.writeFileSync(path.join(root, "reads/sample-run.json"), JSON.stringify(run, null, 2) + "\n");

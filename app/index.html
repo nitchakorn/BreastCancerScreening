@@ -14,6 +14,10 @@
       <div><p class="eyebrow">Breast screening follow-up · Synthetic data only</p><h1>Agent workspace</h1><p class="lede">Give the agent a report and watch it follow up until the result is resolved.</p></div>
       <a class="button secondary" href="/simulation#workflow">View simulation &amp; workflow</a>
     </header>
+    <section class="problem" aria-labelledby="problem-title">
+      <h2 id="problem-title">The problem</h2>
+      <p>Women with an abnormal mammogram sometimes get lost before follow-up, especially older women. Sometimes the finding is in both breasts and she only hears about one side. Sometimes the message gets lost between the radiologist, her doctor and her. This agent follows every finding, on each side, until it's resolved.</p>
+    </section>
     <div class="milestone" aria-label="The loop"><span>01 Read &amp; check the report</span><span>02 Text, portal, call &amp; replies</span><span>03 Booking &amp; appointment</span><span>04 Result closes the loop</span></div>
     <div id="connection" class="notice" role="status">Checking the local agent…</div>
     <section class="card clock" aria-labelledby="clock-title">
@@ -25,6 +29,7 @@
       <div class="clock-buttons">
         <button type="button" class="secondary" id="clock-day">+1 day</button>
         <button type="button" class="secondary" id="clock-week">+1 week</button>
+        <button type="button" class="secondary" id="clock-month">+1 month</button>
         <button type="button" class="secondary quiet" id="reset">Start over</button>
       </div>
       <p id="clock-error" class="error" role="alert" hidden></p>
@@ -61,6 +66,7 @@
         <p class="empty" id="detail-empty">Choose a case to see the agent’s plan, the test inbox, the schedule and every report.</p>
         <div id="detail" hidden>
           <dl id="facts" class="facts"></dl>
+          <div id="tracks" class="tracks" hidden></div>
           <p id="inputs-pending" class="pending" hidden></p>
 
           <div id="person" class="person" hidden>
@@ -79,7 +85,7 @@
           </div>
 
           <div class="case-section">
-            <h3>Coming up</h3>
+            <h3>Coming up <span class="muted small">deadlines are placeholders for clinical review</span></h3>
             <ol id="coming" class="coming"></ol>
           </div>
 
@@ -122,7 +128,7 @@
         </div>
       </section>
     </div>
-    <footer><p>The workspace runs the same engine as the simulation (agent/agent.js), and a test replays all nine simulated patients through it to check that the agent makes the same decisions on the same days.</p><p>Not for clinical use. No real patient messages, bookings or EHR writes. This local workspace has no user authentication.</p></footer>
+    <footer><p>The workspace runs the same engine as the simulation (agent/agent.js), and a test replays all ten simulated patients through it to check that the agent makes the same decisions on the same days, for each breast.</p><p>Not for clinical use. No real patient messages, bookings or EHR writes. This local workspace has no user authentication.</p></footer>
   </main>
 </body>
 </html>

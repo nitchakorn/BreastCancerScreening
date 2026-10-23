@@ -3,5 +3,19 @@
   "model": "claude-sonnet-5-5",
   "calls": 24,
   "total_cost_usd": 0.296,
-  "median_seconds": 2.6
+  "median_seconds": 2.6,
+  "added": [
+    {
+      "date": "2026-10-23",
+      "ids": [
+        "P10-dx",
+        "P10-path",
+        "P10-r1"
+      ],
+      "calls": 3,
+      "total_cost_usd": 0.051,
+      "model": "claude-sonnet-5-5",
+      "note": "Joyce K. (P10), the patient with findings in both breasts"
+    }
+  ]
 }

@@ -5,5 +5,6 @@
   { "id": "P5-r1", "patient": "P5", "text": "Booked for October 8. Thank you for the reminder." },
   { "id": "P7-r1", "patient": "P7", "text": "I'm really scared this means I have cancer. I haven't slept since the appointment. Can someone call me?" },
   { "id": "P8-r1", "patient": "P8", "text": "Booked for Monday morning." },
-  { "id": "P9-r1", "patient": "P9", "text": "OK I scheduled it for the 29th." }
+  { "id": "P9-r1", "patient": "P9", "text": "OK I scheduled it for the 29th." },
+  { "id": "P10-r1", "patient": "P10", "text": "Got it. I booked the biopsy for Tuesday the 15th." }
 ]

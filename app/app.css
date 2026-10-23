@@ -67,6 +67,14 @@ summary { cursor:pointer; font-size:13px; font-weight:650; }
 pre { white-space:pre-wrap; overflow-wrap:anywhere; font:12px/1.65 ui-monospace,SFMono-Regular,Consolas,monospace; padding:12px; border-radius:6px; background:var(--bg); }
 .problem-list { padding-left:20px; font-size:14px; }
 footer { margin-top:30px; padding-top:20px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; display:grid; gap:8px; }
+/* the problem */
+.problem { margin:0 0 18px; padding:16px 20px; border-left:4px solid var(--accent); background:var(--surface); border-radius:0 10px 10px 0; }
+.problem h2 { font-size:15px; text-transform:uppercase; letter-spacing:.08em; color:var(--accent); margin-bottom:6px; }
+.problem p { font-size:16px; max-width:80ch; }
+/* her other breast */
+.tracks { margin-top:16px; padding:12px 14px; border:1px solid var(--line); border-radius:9px; display:grid; gap:8px; }
+.track { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:14px; }
+.track span:first-child { flex:1 1 220px; }
 /* demo clock */
 .clock { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:14px 24px; margin-bottom:22px; padding:18px 24px; }
 .clock-date { font-size:22px; font-weight:700; letter-spacing:-.02em; margin:2px 0 4px; }

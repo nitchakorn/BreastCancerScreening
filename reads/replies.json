@@ -48,5 +48,12 @@
     ],
     "quote": "I scheduled it for the 29th",
     "summary": "She says she scheduled her appointment for the 29th."
+  },
+  "P10-r1": {
+    "labels": [
+      "booked"
+    ],
+    "quote": "I booked the biopsy for Tuesday the 15th",
+    "summary": "She says she has booked her biopsy for Tuesday the 15th."
   }
 }

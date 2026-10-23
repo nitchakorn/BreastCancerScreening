@@ -63,5 +63,13 @@
       { "when": "hold", "after": 1, "person": "Radiologist", "note": "Reviewed the report. The impression was entered in error. Issued an addendum.", "doc": "P9-addendum" },
       { "when": "outreach", "doc": "P9-addendum", "after": 0, "reply": "P9-r1", "book": { "appt": "2026-09-29", "kind": "imaging", "result": "P9-dx" } }
     ]
+  },
+  {
+    "id": "P10", "name": "Joyce K.", "first": "Joyce", "age": 68, "path": "Findings in both breasts: right BI-RADS 4A, left BI-RADS 3. Books the right biopsy, which is benign. The left side stays on its own six-month track.",
+    "first_doc": "P10-dx", "arrives": "2026-09-08",
+    "reactions": [
+      { "when": "outreach", "doc": "P10-dx", "side": "right", "after": 1, "reply": "P10-r1", "book": { "appt": "2026-09-15", "kind": "biopsy", "result": "P10-path", "resultAfter": 3 } },
+      { "when": "concordance", "side": "right", "after": 1, "person": "Radiologist", "note": "Fibroadenoma matches the right breast imaging. Concordant." }
+    ]
   }
 ]

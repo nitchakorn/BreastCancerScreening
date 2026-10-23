@@ -9,13 +9,15 @@ const patients = require('../data/patients.json');
 // Reports that start a case. The exam date moves to today.
 const STARTERS = [
   ['P2-screen', 'Diagnostic imaging'], ['P1-screen', 'Routine screening'], ['P7-dx', 'Biopsy pathway'], ['P9-screen', 'Conflicting findings'],
-  ['P5-apr', 'Six-month follow-up'], ['P8-dx', 'BI-RADS 5 heads-up'], ['P7-path', 'Benign pathology review'], ['P8-path', 'Malignant pathology handoff']
+  ['P5-apr', 'Six-month follow-up'], ['P8-dx', 'BI-RADS 5 heads-up'], ['P7-path', 'Benign pathology review'], ['P8-path', 'Malignant pathology handoff'],
+  ['P10-dx', 'Both breasts: biopsy right, 6 months left']
 ];
 // Reports that continue a case: results, a corrected report, pathology.
 const NEXT = [
   ['P2-dx', 'Diagnostic result: benign (BI-RADS 2)'], ['P9-dx', 'Diagnostic result: negative (BI-RADS 1)'],
   ['P7-dx', 'Diagnostic result: suspicious, biopsy needed (BI-RADS 4B)'], ['P9-addendum', 'Radiologist addendum: corrected to BI-RADS 0'],
-  ['P5-6mo', 'Six-month result: stable (BI-RADS 3)'], ['P7-path', 'Pathology: benign fibroadenoma'], ['P8-path', 'Pathology: invasive cancer']
+  ['P5-6mo', 'Six-month result: stable (BI-RADS 3)'], ['P7-path', 'Pathology: benign fibroadenoma'], ['P8-path', 'Pathology: invasive cancer'],
+  ['P10-path', 'Pathology: benign fibroadenoma, right breast']
 ];
 const REPLIES = [
   ['P3-r1', 'Has no ride'], ['P2-r1', 'Says she booked'], ['P7-r1', 'Scared, asks for a call'], ['S-time', 'Wants another day'],
@@ -70,6 +72,7 @@ function recordedRead(text) {
   const read = structuredClone(reads[d.id]);
   if (read.exam_date) read.exam_date = toIso(move(toUs(read.exam_date)));
   for (const key of Object.keys(read.quotes || {})) read.quotes[key] = move(read.quotes[key]);
+  for (const b of read.breasts || []) for (const key of Object.keys(b.quotes || {})) b.quotes[key] = move(b.quotes[key]);
   read.mismatch_quote = move(read.mismatch_quote);
   return read;
 }

@@ -1,6 +1,6 @@
-// The workspace and the simulation share one engine. This replays the simulation's nine patients
+// The workspace and the simulation share one engine. This replays the simulation's ten patients
 // through the workspace (saved cases, recorded reads, bookings, people) and checks that the agent
-// makes the same decisions on the same days.
+// makes the same decisions on the same days, for each breast that has its own case.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const A = require('../agent/agent.js');
@@ -18,7 +18,7 @@ const move = text => text.replace(US, m => { const iso = A.addDays(`${m.slice(6)
 const decisions = events => events.filter(e => e.actor === 'agent')
   .map(e => [e.day, e.kind === 'validation_passed' || e.kind === 'validation_held' ? 'check' : e.kind, e.handoffKind || e.channel || ''].join(' '));
 
-test('the workspace makes the same decisions on the same days as the simulation, for all nine patients', async () => {
+test('the workspace makes the same decisions on the same days as the simulation, for all ten patients and each breast', async () => {
   const sim = A.simulate(input);
   const store = openStore(':memory:'), loop = createLoop(store), reader = createReader({ env: { READER_MODE: 'recorded' } });
   const caseOf = {};
@@ -54,13 +54,24 @@ test('the workspace makes the same decisions on the same days as the simulation,
     }
     loop.advanceAll(today, now);
   }
-  const last = sim.snapshots[A.RULES.days];
+  const last = sim.snapshots[A.RULES.days], end = A.dateOf(A.RULES.days + K);
+  let compared = 0;
   for (const p of input.patients) {
-    const item = store.get(caseOf[p.id], A.dateOf(A.RULES.days + K));
-    const workspace = item.events.map(e => ({ ...e, ...(e.meta || {}), day: A.dayOf(e.createdAt.slice(0, 10)) - K }));
-    assert.deepEqual(decisions(workspace), decisions(sim.events.filter(e => e.patient === p.id)), `${p.id} decisions`);
-    assert.equal(item.agent.resolvedDays, last[p.id].resolvedDays, `${p.id} days to resolution`);
-    assert.equal(item.messages.length, sim.events.filter(e => e.patient === p.id && e.actor === 'agent' && ['text', 'portal', 'call'].includes(e.kind)).length, `${p.id} messages`);
+    // In the simulation each breast with its own case is a track; in the workspace it is a case in the patient's group.
+    const main = store.get(caseOf[p.id], end);
+    const cases = [main, ...main.tracks.map(t => store.get(t.id, end))];
+    const mine = sim.events.filter(e => e.patient === p.id);
+    const tracks = [...new Set(mine.map(e => e.track))];
+    assert.equal(cases.length, tracks.length, `${p.id} cases`);
+    tracks.forEach((track, i) => {
+      const item = cases[i], simTrack = mine.filter(e => e.track === track);
+      const workspace = item.events.map(e => ({ ...e, ...(e.meta || {}), day: A.dayOf(e.createdAt.slice(0, 10)) - K }));
+      assert.deepEqual(decisions(workspace), decisions(simTrack), `${track} decisions`);
+      assert.equal(item.messages.length, simTrack.filter(e => e.actor === 'agent' && ['text', 'portal', 'call'].includes(e.kind)).length, `${track} messages`);
+      compared += decisions(simTrack).length;
+    });
+    assert.equal(main.agent.resolvedDays, last[p.id].resolvedDays, `${p.id} days to resolution`);
   }
+  assert(compared > 100, `compared ${compared} decisions`);
   store.close();
 });

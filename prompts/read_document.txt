@@ -5,10 +5,12 @@ You will get one breast imaging report, report addendum, or pathology report. Re
 Rules:
 1. Only report what the document says. Never guess. Use null when something is not stated.
 2. Copy every quote word for word from the document. Use the shortest span that proves the fact.
-3. "birads" is the assessment category stated in the IMPRESSION (or the corrected impression of an addendum), written as it appears: "0", "1", "2", "3", "4", "4A", "4B", "4C", "5" or "6".
+3. "birads" is the assessment category stated in the IMPRESSION (or the corrected impression of an addendum), written as it appears: "0", "1", "2", "3", "4", "4A", "4B", "4C", "5" or "6". When the impression also gives an overall assessment, use the overall one.
 4. "findings_match_impression" is false when the FINDINGS describe something the impression's category does not account for, for example a mass or suspicious calcifications in a report whose impression is negative or benign. Otherwise true. Use null for pathology reports.
 5. "mismatch_quote" is the exact words from the findings that conflict with the impression, or null.
 6. For pathology, "pathology_result" is one of: malignant, benign, atypia, nondiagnostic.
+7. "side" is the breast that needs follow-up: "left" or "right". Use "both" when both breasts need follow-up, or when an exam of both breasts is negative or benign. For pathology, the breast that was biopsied.
+8. "breasts" lists one entry per breast only when the impression gives each breast its own BI-RADS assessment. Each entry has that breast's side, category, recommendation and quotes. Otherwise use an empty list.
 
 Reply with only a JSON object in this shape, no other text:
 {
@@ -21,6 +23,14 @@ Reply with only a JSON object in this shape, no other text:
   "mismatch_quote": null,
   "pathology_result": "malignant | benign | atypia | nondiagnostic, or null",
   "diagnosis": "pathology diagnosis in a few words, or null",
+  "breasts": [
+    {
+      "side": "left | right",
+      "birads": "category as written",
+      "next_step": "the recommendation for this breast in a few words, or null",
+      "quotes": { "birads": "exact words", "next_step": "exact words, or null" }
+    }
+  ],
   "quotes": {
     "exam_date": "exact words",
     "birads": "exact words, or null",

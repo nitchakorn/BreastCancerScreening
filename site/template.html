@@ -77,6 +77,14 @@ button { font: inherit; color: inherit; }
 /* Header */
 .top { display: grid; gap: 14px; }
 .lede { font-size: 18px; max-width: 64ch; }
+.problem { border-left: 4px solid var(--accent); background: var(--surface); padding: 14px 18px; border-radius: 0 var(--radius) var(--radius) 0; max-width: 78ch; }
+.problem h2 { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin: 0 0 6px; }
+.problem p { margin: 0; font-size: 17px; }
+.trk { display: block; white-space: normal; }
+.trk + .trk { margin-top: 4px; }
+.trk b { font-weight: 600; margin-right: 4px; }
+.side-tag { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); margin-right: 6px; }
+.note { color: var(--muted); font-size: 14px; margin: 0 0 8px; }
 .meta { display: flex; flex-wrap: wrap; gap: 10px 32px; margin: 4px 0 0; }
 .meta div { display: grid; gap: 2px; }
 .meta dt { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
@@ -140,6 +148,8 @@ td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .ptable tbody tr:hover { background: var(--sunken); }
 .ptable tr[aria-selected="true"] { background: var(--accent-soft); }
 .ptable tr[aria-selected="true"] td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.ptable tr.sub[aria-selected="true"] td:first-child { box-shadow: none; }
+.ptable tr.has-sub td:not([rowspan]) { border-bottom-style: dashed; }
 .pbtn { border: 0; background: none; padding: 0; text-align: left; cursor: pointer; font-weight: 600; }
 .pbtn small { display: block; font-weight: 400; font-size: 12.5px; color: var(--muted); }
 .late { color: var(--overdue); font-size: 12.5px; font-weight: 600; display: block; }
@@ -248,9 +258,13 @@ details.more .tpl div { display: grid; gap: 2px; }
   <header class="top">
     <p class="eyebrow">Working demo · synthetic patients · not for clinical use</p>
     <h1>Breast Screening Follow-up Agent</h1>
-    <p class="lede">Makes sure no woman with an abnormal mammogram gets lost before her result is resolved. Claude reads each report and each patient reply. Code checks those reads, sets the deadlines, decides every follow-up, and hands a case to a person only when a rule says so.</p>
+    <div class="problem">
+      <h2>The problem</h2>
+      <p>Women with an abnormal mammogram sometimes get lost before follow-up, especially older women. Sometimes the finding is in both breasts and she only hears about one side. Sometimes the message gets lost between the radiologist, her doctor and her.</p>
+    </div>
+    <p class="lede">This agent follows every finding, on each side, until it's resolved. Claude reads each report and each patient reply. Code checks those reads, sets the deadlines, decides every follow-up, and hands a case to a person only when a rule says so.</p>
     <dl class="meta">
-      <div><dt>Simulation</dt><dd>9 patients over 90 days, Sep 1 to Nov 30, 2026</dd></div>
+      <div><dt>Simulation</dt><dd>10 patients over 90 days, Sep 1 to Nov 30, 2026</dd></div>
       <div><dt>Code</dt><dd><a href="https://github.com/nitchakorn/BreastCancerScreening" target="_blank" rel="noopener">github.com/nitchakorn/BreastCancerScreening</a></dd></div>
       <div><dt>Built by</dt><dd>Nitchakorn · Oct 22, 2026</dd></div>
     </dl>
@@ -344,9 +358,9 @@ details.more .tpl div { display: grid; gap: 2px; }
     </div>
     <ol class="steps">
       <li><b>A new report arrives.</b> This starts the agent.</li>
-      <li><b>Claude reads the report.</b> It returns the BI-RADS category, which breast, the recommended next step, the exam date and the exact words that support each one.</li>
+      <li><b>Claude reads the report.</b> It returns the BI-RADS category, which breast needs follow-up, the recommended next step, the exam date and the exact words that support each one. When the report assesses each breast separately, it returns each breast's assessment too.</li>
       <li><b>Code checks the read.</b> Every quote must match the report word for word. If the BI-RADS category is missing, or the findings and the impression disagree, the case goes to a radiologist and stops there.</li>
-      <li><b>Rules pick the pathway and set a due date.</b> See the table below.</li>
+      <li><b>Rules pick the pathway and set a due date for each breast.</b> See the table below. When each breast has its own assessment, each breast gets its own case, so a finding on one side can't hide the other.</li>
       <li><b>The agent waits and watches.</b> Each day it checks whether the next step was booked or done.</li>
       <li><b>If the next step isn't booked, the agent reaches out.</b> It texts a booking link and checks the schedule. Claude reads her replies. No ride means a free ride option, and another time means new slots. No answer means a portal message, then an automated call.</li>
       <li><b>A person steps in only for exceptions.</b> She says she is scared or asks a medical question, turns down care, raises a barrier the agent can't solve, or doesn't answer after three tries.</li>
@@ -354,6 +368,7 @@ details.more .tpl div { display: grid; gap: 2px; }
       <li><b>The case closes when the result is resolved.</b> Back to routine screening, on a six-month track, or handed to breast surgery after a cancer diagnosis.</li>
     </ol>
     <h3>Pathways and deadlines</h3>
+    <p class="note">These deadlines are placeholders for clinical review. A health system's clinicians would set the real ones.</p>
     <div class="tbl-wrap">
       <table style="min-width:640px">
         <thead><tr><th>BI-RADS</th><th>Next step</th><th>Due</th><th>Agent outreach starts</th><th>Goes to a person</th></tr></thead>
@@ -367,6 +382,7 @@ details.more .tpl div { display: grid; gap: 2px; }
       </table>
     </div>
     <div class="prose">
+      <p>Each breast with its own assessment follows its own row of this table. Joyce K. (P10) has a BI-RADS 4A on the right and a BI-RADS 3 on the left: the right side goes to biopsy now, the left side waits for its six-month imaging, and closing the right side does not close the left.</p>
       <p>The outer limit is 60 days from the abnormal result to resolution, the window a national quality measure uses. The deadlines above are set so a case never gets near it. For BI-RADS 3 there is time, so unanswered reminders keep going until one month after the due date.</p>
       <p>A person decides any report the agent can't read with confidence, the wording of each message type (approved once before launch), whether a benign biopsy matches the imaging, and any case at the navigator stage. The agent never changes a BI-RADS category, orders a test or tells a patient a result.</p>
     </div>
@@ -410,7 +426,7 @@ details.more .tpl div { display: grid; gap: 2px; }
   </section>
 
   <footer class="about">
-    <p>All nine patients, their reports, their replies and the simulated events are made up for this demo. Riverside Breast Center is not a real place.</p>
+    <p>All ten patients, their reports, their replies and the simulated events are made up for this demo. Riverside Breast Center is not a real place.</p>
     <p id="run-line"></p>
     <p>The page replays that run. Nothing is sent to anyone. Not for clinical use. Built by Nitchakorn with Claude. <a href="https://github.com/nitchakorn/BreastCancerScreening" target="_blank" rel="noopener">Code on GitHub</a>.</p>
   </footer>
@@ -518,17 +534,35 @@ details.more .tpl div { display: grid; gap: 2px; }
       if (sa.status === "overdue") return sb.overdueDays - sa.overdueDays;
       return (sa.due || "9999") < (sb.due || "9999") ? -1 : (sa.due || "9999") > (sb.due || "9999") ? 1 : 0;
     });
-    var head = "<thead><tr><th>Patient</th><th>BI-RADS</th><th>Next step</th><th>Due</th><th>Status</th><th>Last agent action</th></tr></thead>";
+    var head = "<thead><tr><th>Patient</th><th>Breast</th><th>BI-RADS</th><th>Next step</th><th>Due</th><th>Status</th><th>Last agent action</th></tr></thead>";
     var body = rows.map(function (p) {
       var s = snap[p.id], st = ST[s.status];
       var bi = s.status === "waiting" ? "" : (s.personKind === "hold" ? "Held" : (s.birads || ""));
-      var due = s.due ? A.fmtShort(s.due) + (s.due.slice(0, 4) !== "2026" ? ", " + s.due.slice(0, 4) : "") : "";
+      var due = dueText(s.due);
       var dueNote = s.status === "overdue" ? '<span class="late">' + plural(s.overdueDays, "day", "days") + " late</span>" : (s.booked && s.status !== "done" ? '<span class="soon">Booked for ' + A.fmtShort(s.booked) + "</span>" : "");
       var step = s.status === "waiting" ? '<span class="muted">Report arrives ' + A.fmtShort(p.arrives) + "</span>" : esc(s.step || "");
-      return '<tr data-id="' + p.id + '" aria-selected="' + (state.sel === p.id) + '"><td><button type="button" class="pbtn" data-id="' + p.id + '">' + esc(p.name) + "<small>" + p.id + " · " + p.age + "</small></button></td><td class=\"num\">" + esc(bi) + "</td><td>" + step + "</td><td>" + esc(due) + dueNote + '</td><td><span class="chip ' + st.cls + '">' + esc(s.status === "person" && s.person ? "With " + shortWho(s.person) : st.label) + '</span></td><td class="last">' + esc(s.lastAgent || "") + "</td></tr>";
+      var side = s.status === "waiting" ? "" : esc(sideName(s.side));
+      var who = '<button type="button" class="pbtn" data-id="' + p.id + '">' + esc(p.name) + "<small>" + p.id + " · " + p.age + "</small></button>";
+      var chip = '<span class="chip ' + st.cls + '">' + esc(s.status === "person" && s.person ? "With " + shortWho(s.person) : st.label) + "</span>";
+      var tr = '<tr data-id="' + p.id + '" aria-selected="' + (state.sel === p.id) + '"';
+      if (s.tracks) {
+        // Each breast has its own case, so each gets its own line in the table.
+        var n = s.tracks.length;
+        return s.tracks.map(function (t, i) {
+          var cells = "<td>" + esc(sideName(t.side)) + '</td><td class="num">' + esc(t.birads || "") + "</td><td>" + esc(t.status === "done" ? "Done: " + (t.outcome || "") : t.step || "") + "</td><td>" + esc(t.status === "done" ? "" : dueText(t.due)) + "</td>";
+          return i === 0 ? tr + ' class="has-sub"><td rowspan="' + n + '">' + who + "</td>" + cells + '<td rowspan="' + n + '">' + chip + '</td><td rowspan="' + n + '" class="last">' + esc(s.lastAgent || "") + "</td></tr>"
+            : tr + ' class="sub">' + cells + "</tr>";
+        }).join("");
+      }
+      return tr + "><td>" + who + "</td><td>" + side + '</td><td class="num">' + esc(bi) + "</td><td>" + step + "</td><td>" + esc(due) + dueNote + "</td><td>" + chip + '</td><td class="last">' + esc(s.lastAgent || "") + "</td></tr>";
     }).join("");
     $("ptable").innerHTML = head + "<tbody>" + body + "</tbody>";
   }
+  function sideName(side) { return side === "left" ? "Left" : side === "right" ? "Right" : side === "both" ? "Both" : ""; }
+  function dueText(due) { return due ? A.fmtShort(due) + (due.slice(0, 4) !== "2026" ? ", " + due.slice(0, 4) : "") : ""; }
+  // Patients who have a separate case for each breast at some point in the run.
+  var MULTI = {};
+  SIM.events.forEach(function (e) { if (e.track && e.track.indexOf(":") > 0) MULTI[e.patient] = true; });
   function shortWho(who) { return who === "Nurse navigator" ? "the navigator" : who === "Radiologist" ? "a radiologist" : who === "Breast surgery team" ? "breast surgery" : "a person"; }
   $("ptable").addEventListener("click", function (e) {
     var tr = e.target.closest("tr[data-id]");
@@ -572,7 +606,12 @@ details.more .tpl div { display: grid; gap: 2px; }
     var mine = evs.filter(function (e) { return e.patient === p.id; });
     var html = '<div class="d-head"><h3>' + esc(p.name) + ' <span class="muted" style="font-weight:500">' + p.age + "</span></h3><p class=\"path\">" + esc(p.id + ". " + p.path) + '</p><div class="d-now"><span class="chip ' + st.cls + '">' + esc(st.label) + "</span>" +
       (s.status === "waiting" ? '<span class="muted">Her first report arrives ' + esc(A.fmt(p.arrives)) + ".</span>" : (s.outcome ? "<span>" + esc(s.outcome) + "</span>" : (s.step ? "<span>" + esc(s.step) + (s.due ? ", due " + esc(A.fmt(s.due)) : "") + "</span>" : ""))) +
-      (s.person && s.status !== "done" ? '<span class="muted">With the ' + esc(s.person.toLowerCase()) + "</span>" : "") + "</div></div>";
+      (s.person && s.status !== "done" ? '<span class="muted">With the ' + esc(s.person.toLowerCase()) + "</span>" : "") +
+      (!s.tracks && s.side && s.status !== "waiting" ? '<span class="muted">' + esc(sideName(s.side)) + (s.side === "both" ? " breasts" : " breast") + "</span>" : "") + "</div>" +
+      (s.tracks ? s.tracks.map(function (t) {
+        var later = t.status !== "done" && t.step === A.RULES.shortInterval.step && t.due ? ". Reminders start " + A.fmt(A.addMonths(t.due, -A.RULES.shortInterval.outreachMonthsBefore)) : "";
+        return '<p class="trk"><b>' + esc(sideName(t.side)) + " breast</b> " + esc(t.status === "done" ? "Done. " + (t.outcome || "") : (t.step || "") + (t.due ? ", due " + A.fmt(t.due) : "") + later + ".") + "</p>";
+      }).join("") : "") + "</div>";
     if (s.status === "waiting") { $("detail").innerHTML = html; return; }
     var docIds = mine.filter(function (e) { return e.kind === "doc"; }).map(function (e) { return e.doc; });
     html += "<div><h4>Reports</h4></div>" + docIds.map(function (id) {
@@ -592,7 +631,7 @@ details.more .tpl div { display: grid; gap: 2px; }
       var a = actorOf(e);
       var isMsg = e.actor === "agent" && (e.kind === "text" || e.kind === "portal" || e.kind === "call");
       var label = isMsg ? (e.kind === "text" ? "Text sent" : e.kind === "portal" ? "Portal message" : "Automated call") : "";
-      return '<li><span class="when">' + esc(A.fmtShort(e.date)) + '</span><span class="what"><span class="actor ' + a[1] + '">' + esc(a[0]) + "</span>" +
+      return '<li><span class="when">' + esc(A.fmtShort(e.date)) + '</span><span class="what"><span class="actor ' + a[1] + '">' + esc(a[0]) + "</span>" + (MULTI[p.id] && e.side ? '<span class="side-tag">' + esc(sideName(e.side)) + "</span>" : "") +
         (isMsg ? "<span>" + esc(label) + '</span><span class="msg">' + esc(e.text) + "</span>" : e.actor === "patient" ? '<span class="msg">' + esc(e.text) + "</span>" : "<span>" + esc(e.text) + "</span>") + "</span></li>";
     }).join("") + "</ol></div>";
     $("detail").innerHTML = html;
@@ -615,7 +654,7 @@ details.more .tpl div { display: grid; gap: 2px; }
     var list = agentEv.filter(function (e) { return FEED_KINDS[e.kind]; }).slice().reverse();
     $("feed").innerHTML = list.length ? "<ol>" + list.map(function (e) {
       var text = e.kind === "handoff" ? e.text : e.short;
-      return '<li><span class="when">' + esc(A.fmtShort(e.date)) + '</span><span class="who">' + esc(byId[e.patient].name) + '</span><span class="act">' + esc(text) + "</span></li>";
+      return '<li><span class="when">' + esc(A.fmtShort(e.date)) + '</span><span class="who">' + esc(byId[e.patient].name + (MULTI[e.patient] && e.side ? " · " + e.side : "")) + '</span><span class="act">' + esc(text) + "</span></li>";
     }).join("") + "</ol>" : '<p class="empty">Nothing yet.</p>';
   }
 
@@ -637,7 +676,9 @@ details.more .tpl div { display: grid; gap: 2px; }
     ["Portal message", "portal"], ["Automated call", "call"], ["Check-in text", "nudge"], ["Ride option", "transport"], ["Other times", "slots"], ["Appointment reminder", "appt_reminder"]
   ].map(function (t) { return "<div><b>" + esc(t[0]) + '</b><span class="muted">' + esc(A.message(t[1], demo, { due: "2026-10-08", appt: "2026-10-08" })) + "</span></div>"; }).join("");
   var run = DATA.run;
-  $("run-line").textContent = "Claude read " + DATA.documents.length + " reports and " + DATA.replies.length + " replies on " + A.fmt(run.date) + " with " + run.modelName + ": " + run.calls + " calls, about " + Math.round(run.median_seconds) + " seconds each, about " + Math.round(run.total_cost_usd * 100) + " cents in total. Code checked every quote against its source.";
+  var added = run.added || [], cost = added.reduce(function (sum, a) { return sum + a.total_cost_usd; }, run.total_cost_usd);
+  $("run-line").textContent = "Claude read " + DATA.documents.length + " reports and " + DATA.replies.length + " replies with " + run.modelName + ": " + run.calls + " calls on " + A.fmt(run.date) +
+    added.map(function (a) { return ", and " + a.calls + " more on " + A.fmt(a.date) + " for " + a.note; }).join("") + ". About " + Math.round(run.median_seconds) + " seconds each, about " + Math.round(cost * 100) + " cents in total. Code checked every quote against its source.";
 
   render();
 
@@ -706,11 +747,15 @@ details.more .tpl div { display: grid; gap: 2px; }
       if (problems.length) verdict = "Checks failed: " + problems.join(" ") + " The case would go to a radiologist and stop there.";
       else if (doc.kind === "pathology") verdict = r.pathology_result === "malignant" ? "Checks passed. Malignant: the case would be handed to breast surgery and the PCP told." : "Checks passed. " + r.pathology_result + ": a person would confirm it matches the imaging.";
       else {
-        var b = A.normBirads(r.birads), pw = A.pathwayFor(b), exam = r.exam_date;
-        verdict = "Checks passed. " + (pw === "routine" ? "Routine screening. No outreach." :
-          pw === "diagnostic" ? "Diagnostic imaging due " + A.fmt(A.addDays(exam, 14)) + ". The agent would text her a booking link today." :
-          pw === "biopsy" ? "Biopsy due " + A.fmt(A.addDays(exam, 14)) + ". The agent would text her today" + (b === "5" ? " and give the navigator a heads-up" : "") + ", and a person takes over on day 7 if she hasn't booked." :
-          pw === "shortInterval" ? "6-month imaging due " + A.fmt(A.addMonths(exam, 6)) + ". Reminders would start a month before." : "No pathway for this category. A person decides.");
+        var plan = function (sr) {
+          var b = A.normBirads(sr.birads), pw = A.pathwayFor(b), exam = sr.exam_date;
+          return pw === "routine" ? "Routine screening. No outreach." :
+            pw === "diagnostic" ? "Diagnostic imaging due " + A.fmt(A.addDays(exam, 14)) + ". The agent would text her a booking link today." :
+            pw === "biopsy" ? "Biopsy due " + A.fmt(A.addDays(exam, 14)) + ". The agent would text her today" + (b === "5" ? " and give the navigator a heads-up" : "") + ", and a person takes over on day 7 if she hasn't booked." :
+            pw === "shortInterval" ? "6-month imaging due " + A.fmt(A.addMonths(exam, 6)) + ". Reminders would start a month before." : "No pathway for this category. A person decides.";
+        };
+        var sides = A.perBreast(r);
+        verdict = "Checks passed. " + (sides.length ? "Each breast gets its own case. " + sides.map(function (b) { return sideName(b.side) + " breast: " + plan(A.sideRead(r, b)); }).join(" ") : plan(r));
       }
       out.innerHTML = '<article class="doc"><div class="doc-head"><b>Your report</b><span class="muted">' + esc(r && r.exam_date ? A.fmt(r.exam_date) : "") + "</span></div><pre>" + highlight(text, r && r.quotes ? Object.keys(r.quotes).map(function (k) { return r.quotes[k]; }) : [], r && r.mismatch_quote) + "</pre>" + readBlock(doc, r, { ok: !problems.length, text: verdict }) + "</article>";
       st.textContent = "Done.";

@@ -22,6 +22,7 @@
   const addDays = (iso, n) => { const d = new Date(iso + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
   const when = iso => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
   const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+  const breast = side => side === 'left' || side === 'right' ? `${side[0].toUpperCase()}${side.slice(1)} breast` : side === 'both' ? 'Both breasts' : '';
   const key = () => (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random()).replace(/[^a-zA-Z0-9-]/g, '');
 
   function element(tag, text, className) {
@@ -106,7 +107,7 @@
     if (!cases.length) list.append(element('p', 'No cases yet. Start with a sample report.', 'empty'));
     for (const item of cases) {
       const row = element('button', undefined, 'case-row'); row.type = 'button'; row.setAttribute('aria-pressed', String(item.id === selected));
-      const label = element('span', item.patient); label.append(element('small', listLine(item)));
+      const label = element('span', item.patient + (item.side ? ` · ${breast(item.side)}` : '')); label.append(element('small', listLine(item)));
       const badges = element('span', undefined, 'badges');
       if (item.overdueDays > 0 && item.status !== 'closed') badges.append(element('span', `${plural(item.overdueDays, 'day', 'days')} late`, 'badge late'));
       badges.append(badge(item.status));
@@ -121,6 +122,7 @@
   function renderFacts(item) {
     const a = item.agent, dl = $('facts'); dl.replaceChildren();
     if (!a) { fact(dl, 'State', 'Waiting for the first report to be read'); fact(dl, 'Case ID', item.id); return; }
+    fact(dl, 'Breast', breast(item.side) + (item.groupId ? '. The report assessed each breast separately, so each has its own case.' : ''));
     fact(dl, 'Step', a.step || (item.pathway === 'pathology' ? 'Pathology review' : null));
     if (a.due && item.status !== 'closed') fact(dl, 'Due', fmt(a.due) + (a.overdueDays ? ` · ${plural(a.overdueDays, 'day', 'days')} late` : ''));
     if (a.booked) fact(dl, 'Booked', `${a.booked.kind === 'biopsy' ? 'Biopsy' : 'Imaging'} on ${fmtDay(a.booked.appt)}`);
@@ -131,6 +133,21 @@
     if (a.resolvedDays !== null) fact(dl, 'Resolved in', plural(a.resolvedDays, 'day', 'days') + ' from the abnormal result');
     fact(dl, 'Reader', item.model || 'No completed read');
     fact(dl, 'Case ID', item.id);
+  }
+  // Her other breast, when a report gave each breast its own case.
+  function renderTracks(item) {
+    const box = $('tracks'); box.replaceChildren();
+    box.hidden = !item.tracks || !item.tracks.length;
+    if (box.hidden) return;
+    box.append(element('p', 'Her other breast', 'eyebrow'));
+    for (const t of item.tracks) {
+      const row = element('div', undefined, 'track');
+      const text = element('span', `${breast(t.side)}: ${t.status === 'closed' ? (t.outcome || 'closed') : (t.step || 'waiting for its read') + (t.due ? `, due ${fmt(t.due)}` : '')}`);
+      const open = element('button', 'Open', 'secondary compact'); open.type = 'button';
+      open.addEventListener('click', () => select(t.id));
+      row.append(text, badge(t.status), open);
+      box.append(row);
+    }
   }
   function renderPerson(item) {
     const a = item.agent, open = item.reviews.filter(r => r.status === 'open').pop();
@@ -241,9 +258,9 @@
   function renderCase(item) {
     current = item;
     $('detail-empty').hidden = true; $('detail').hidden = false;
-    $('detail-title').textContent = item.patient;
+    $('detail-title').textContent = item.patient + (item.side && item.side !== 'both' ? ` · ${breast(item.side)}` : '');
     $('case-state').replaceWith(Object.assign(badge(item.status), { id: 'case-state' }));
-    renderFacts(item); renderPerson(item); renderComing(item); renderThread(item); renderReports(item); renderTimeline(item); renderForms(item);
+    renderFacts(item); renderTracks(item); renderPerson(item); renderComing(item); renderThread(item); renderReports(item); renderTimeline(item); renderForms(item);
   }
 
   /* ---------- loading ---------- */
@@ -387,7 +404,7 @@
     event.preventDefault();
     act(async () => { await post(`/api/cases/${selected}/reviews/${$('close-form').dataset.review}`, { action: 'close', note: $('close-note').value }); $('close-note').value = ''; }, 'person-error', event.submitter);
   });
-  for (const [id, days] of [['clock-day', 1], ['clock-week', 7]]) {
+  for (const [id, days] of [['clock-day', 1], ['clock-week', 7], ['clock-month', 30]]) {
     $(id).addEventListener('click', () => act(async () => renderClock(await post('/api/clock', { days })), 'clock-error', $(id)));
   }
   let resetArmed = null;
