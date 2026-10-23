@@ -72,3 +72,47 @@ test('recorded mode reads the bundled replies and refuses any other text',async(
   assert.deepEqual(known.read.labels,['transport_barrier']);
   await assert.rejects(reader.readReply('Can I come next week?'),e=>e.code==='unsupported_sample');
 });
+
+// A stand-in for the claude command: records what it was given and answers like `claude -p --output-format json`.
+const { EventEmitter } = require('node:events');
+const { PassThrough } = require('node:stream');
+function fakeClaude(reply, calls) {
+  return (command, args) => {
+    const child = new EventEmitter();
+    child.stdin = new PassThrough(); child.stdout = new PassThrough(); child.kill = () => {};
+    let input = '';
+    child.stdin.on('data', d => { input += d; });
+    child.stdin.on('finish', () => {
+      calls.push({ command, args, input });
+      setImmediate(() => { child.stdout.end(typeof reply === 'string' ? reply : JSON.stringify(reply)); child.emit('close', 0); });
+    });
+    return child;
+  };
+}
+
+test('claude-code mode reads through the claude command: text on stdin, no tools, no saved session, schema enforced',async()=>{
+  const calls=[];
+  const read=recordedRead(sample.text);
+  const reader=createReader({env:{READER_MODE:'claude-code'},spawnImpl:fakeClaude({is_error:false,structured_output:read,modelUsage:{'claude-sonnet-test':{outputTokens:120}}},calls)});
+  assert.equal(reader.status().mode,'claude-code');
+  const result=await reader.read(sample.text);
+  assert.deepEqual(result.read,read);
+  assert.equal(result.model,'claude-sonnet-test');
+  const {command,args,input}=calls[0];
+  assert.equal(command,'claude');
+  assert.equal(args[args.indexOf('--tools')+1],'');
+  assert(args.includes('--no-session-persistence'));
+  assert.match(args[args.indexOf('--system-prompt')+1],/untrusted source material/);
+  assert.equal(JSON.parse(args[args.indexOf('--json-schema')+1]).properties.quotes.required.length,4);
+  assert(input.includes(sample.text),'the report goes in on stdin, not on the command line');
+  assert(!args.some(a=>a.includes(sample.text)));
+});
+
+test('claude-code mode fails clearly when Claude Code errors, is missing or returns no structured read',async()=>{
+  const errored=createReader({env:{READER_MODE:'claude-code'},spawnImpl:fakeClaude({is_error:true,subtype:'error'},[])});
+  await assert.rejects(errored.readReply('ok'),e=>e.code==='provider_error');
+  const empty=createReader({env:{READER_MODE:'claude-code'},spawnImpl:fakeClaude({is_error:false,result:'hello'},[])});
+  await assert.rejects(empty.readReply('ok'),e=>e.code==='invalid_output');
+  const missing=createReader({env:{READER_MODE:'claude-code',CLAUDE_CODE_COMMAND:'/no/such/claude'}});
+  await assert.rejects(missing.readReply('ok'),e=>e.code==='cli_unavailable');
+});

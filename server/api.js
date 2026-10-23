@@ -7,7 +7,7 @@ const { examples, nextReports, sampleReplies } = require('./samples.js');
   The Node server (app.js) puts HTTP in front of it. The public demo page runs the
   same API inside the browser, with an in-memory store and the recorded reads.
 */
-const SAFE_READER_ERRORS = ['not_configured', 'connection_failed', 'provider_error', 'model_unavailable', 'unsupported_sample'];
+const SAFE_READER_ERRORS = ['not_configured', 'connection_failed', 'provider_error', 'model_unavailable', 'unsupported_sample', 'cli_unavailable'];
 const DAY_MS = 86400000;
 const bad = message => Object.assign(new Error(message), { status: 400 });
 const cleanText = value => typeof value === 'string' ? value.replace(/\r\n?/g, '\n').trim() : '';

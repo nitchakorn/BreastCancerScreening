@@ -299,6 +299,8 @@
       $('connection').classList.toggle('warning', health.runtime !== 'browser' && (!health.reader.configured || health.reader.mode === 'recorded'));
       $('connection').textContent = health.runtime === 'browser'
         ? 'This demo runs in your browser with Claude’s recorded reads of the sample reports and replies. Pick samples to run the whole loop. To have Claude read new text live, run the workspace on your computer.'
+        : health.reader.mode === 'claude-code'
+        ? `Live mode through Claude Code on this computer. Claude reads every new report and reply with your Claude Code sign-in (${health.reader.model}). All messages go to the local test inbox.`
         : health.reader.mode === 'recorded'
         ? 'Recorded mode · no API calls. Claude’s reads of the bundled sample reports and replies were recorded earlier. Pick samples to run the whole loop. New text needs live mode.'
         : health.reader.configured

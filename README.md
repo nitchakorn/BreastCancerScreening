@@ -54,7 +54,11 @@ Two watches exist only in the workspace, because in the simulation the report al
 
 With no API key, the workspace uses **recorded mode**. Claude's reads of the bundled reports and replies were recorded earlier with Claude Code (see `reads/`). Sample reports get their dates moved to the demo clock, and recorded mode moves the dates in the recorded read the same way. Any other text fails openly and can be retried in live mode. It never borrows another sample's answer.
 
-### Live mode
+### Live reading with Claude Code: no API key
+
+If you have [Claude Code](https://claude.com/claude-code) installed and signed in, the workspace can read any new report or reply through it. Copy `.env.example` to `.env`, set `READER_MODE=claude-code`, and run `npm start`. Each read runs `claude -p` with the text on stdin, tools turned off, no saved session, and the same JSON schema the API mode uses, so the answer comes back already in shape. Code still checks every quote before the agent acts. If `claude` is not on your PATH, set `CLAUDE_CODE_COMMAND` to the full path of the program.
+
+### Live mode with an API key
 
 Keep credentials in a local `.env` file, never in Git or chat. Copy `.env.example` to `.env`, set `READER_MODE=live` and `ANTHROPIC_API_KEY`, and restart. Leave `ANTHROPIC_MODEL` blank to use an available Sonnet model. Reports and replies go to the Claude API with a forced tool call (`record_report` or `record_reply`), and their text is treated as source material, never as instructions. Code checks every read before the agent acts. A failed API call keeps the item with a **Retry** button. An unusable answer goes to a person.
 
