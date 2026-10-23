@@ -52,6 +52,9 @@ input,select,textarea { margin-bottom:8px; }
 .facts dd { margin:0; overflow-wrap:anywhere; }
 .message { padding:14px; background:var(--soft); border-radius:9px; margin-top:8px; }
 .message small { display:block; color:var(--muted); margin-top:8px; }
+.message strong { display:block; font-size:11px; margin-bottom:5px; text-transform:uppercase; letter-spacing:.06em; }
+.patient-message { background:var(--bg); border:1px solid var(--line); margin-left:20px; }
+.message p { overflow-wrap:anywhere; }
 .review-item { padding:12px; border-left:3px solid var(--warn); background:var(--warn-bg); color:var(--warn); margin-top:8px; }
 .timeline { list-style:none; padding:0; margin:0; }
 .timeline li { padding:10px 0; border-top:1px solid var(--line); font-size:13px; }

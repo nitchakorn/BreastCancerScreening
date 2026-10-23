@@ -51,3 +51,16 @@ test('missing tool output or truncated output is rejected instead of treated as 
     await assert.rejects(reader.read(sample.text),e=>e.code==='invalid_output');
   }
 });
+
+test('live reply reader uses the reply prompt and a separate structured record_reply tool',async()=>{
+  let sent;
+  const reader=createReader({env:{READER_MODE:'live',ANTHROPIC_API_KEY:'test-key',ANTHROPIC_MODEL:'test'},fetchImpl:async(url,options)=>{
+    sent=JSON.parse(options.body);
+    return response({model:'test',stop_reason:'tool_use',content:[{type:'tool_use',name:'record_reply',input:{labels:['booked'],quote:'I booked.',summary:'The patient reports a booking.'}}]});
+  }});
+  const result=await reader.readReply('I booked.');
+  assert.equal(sent.tool_choice.name,'record_reply');
+  assert.match(sent.system,/patient.*reply/);
+  assert(sent.tools[0].input_schema.properties.labels.items.enum.includes('wrong_number'));
+  assert.equal(result.mode,'live');assert.deepEqual(result.read.labels,['booked']);
+});

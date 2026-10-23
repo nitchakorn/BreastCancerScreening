@@ -10,7 +10,7 @@ This is a demo with synthetic patients. It sends no real messages, books nothing
 
 ## Local agent workspace
 
-The local workspace adds report intake, a background reader, SQLite case storage, rule validation, a human review queue, an action history and an in-app test inbox. The original nine-patient simulation and workflow flowchart remain available from the workspace header.
+The local workspace adds report intake, background report and reply readers, SQLite case storage, rule validation, a human review queue, an action history and a two-way test inbox. The original nine-patient simulation and workflow flowchart remain available from the workspace header.
 
 You need **Node.js 24.5 or newer**. All server and test code uses Node's built-in modules; there are no npm dependencies to install.
 
@@ -30,13 +30,26 @@ Cases, messages, review tasks and events are stored in `.local/cases.sqlite`, wh
 
 Sample dates and deadline checks use `APP_TIME_ZONE` (default `America/New_York`). Event timestamps are stored in UTC and displayed in the browser's local time.
 
+### Reply in the test inbox
+
+After the initial message appears, use **Reply as the patient**. Recorded mode recognizes seven sample replies: three use the existing recorded reads and four use explicitly authored local fixtures. Neither kind calls a model.
+
+- **Need a ride** offers transport support; it does not book a ride.
+- **Different time** offers clearly labeled sample slots; they are not verified availability.
+- **Scared / worried**, **Medical question**, **Decline care**, and **Wrong number** create a navigator review task and pause automation. Further replies remain with human review and cannot restart automatic outreach.
+- **I booked** records an unverified booking claim. It does not confirm an appointment or close the case. The workspace has no scheduling-system integration yet.
+
+Replies are saved before reading, with the reader's labels, supporting quote, mode and model retained in the conversation. Unknown fixture text or a provider failure pauses the case and keeps a retryable reply. Invalid evidence goes to human review. Interrupted reads resume after restart. The database migration is additive and preserves existing cases.
+
+Each response is uniquely keyed to its incoming reply and committed atomically with the decision. A newer incoming reply suppresses stale practical assistance; a human-review reason still takes priority. The browser sends an idempotency key for each submission and retains it for a network retry. API clients can supply `Idempotency-Key`; without it, identical text in the same case reuses its prior reply. Use a fresh key for an intentional repetition. Replies are accepted by `POST /api/cases/:caseId/replies`; retry a failed read with `POST /api/cases/:caseId/replies/:replyId/retry`.
+
 ### Enable live Claude reading later
 
 Keep credentials in environment settings or a local `.env` file, never in Git or chat. To use a local file, copy `.env.example` to `.env`, set `READER_MODE=live` and set `ANTHROPIC_API_KEY` securely. Restart the server afterward. You can leave `ANTHROPIC_MODEL` blank to discover an available Sonnet model from your API account, or choose an available model ID explicitly. To force recorded mode even when a key is present, set `READER_MODE=recorded`.
 
-Live mode calls `api.anthropic.com` using the existing report prompt and a structured `record_report` tool. Code checks the supporting quotes, category and date before selecting an action. A failed API request retains the case with a **Retry report read** action. An unusable structured answer enters human review. The API key stays on the server. In the managed cloud environment, the start command preserves the configured proxy and CA verification.
+Live mode calls `api.anthropic.com` using the existing prompts and separate structured `record_report` and `record_reply` tools. Code checks supporting evidence before selecting an action. A failed API request retains the saved input with a **Retry report read** or **Retry reply read** action. An unusable structured answer enters human review. The API key stays on the server. In the managed cloud environment, the start command preserves the configured proxy and CA verification.
 
-This first milestone stops at **report → read → saved pathway → initial test message or review → navigator handoff if still unbooked at the deadline**. Reply processing, confirmed bookings, repeat outreach and external messaging integrations are future work. Recorded-mode readiness does not establish that live API access works.
+The workspace now supports **report → checked pathway → test message → patient reply → practical help, an unverified booking claim, or human review**, with a navigator handoff if still unbooked at the deadline. A booking claim or paused reply read does not cancel that deadline. Confirmed bookings, follow-up results, repeat outreach and external messaging integrations are future work. Recorded-mode readiness does not establish that live API access works.
 
 ### Validate and demonstrate
 
@@ -46,13 +59,15 @@ npm run check       # original nine-patient simulation
 npm run build       # original standalone dashboard and embedded workflow
 ```
 
-For a short demonstration: submit the diagnostic sample, inspect its evidence and inbox, submit it again to show deduplication, restart the server to show persistence, then submit the conflicting sample to show human review. The automated provider tests use test doubles and do not call Anthropic. A live demonstration requires enabling and checking live mode separately.
+For a short demonstration: submit the diagnostic sample, reply with **Need a ride**, inspect the assistance and quote, then reply **I booked** to see the unverified claim. Reply **Scared / worried** to show a human handoff, then submit another reply to show that automation stays paused. Restart the server to show persistence. A conflicting report also creates review without initial outreach. The automated provider tests use test doubles and do not call Anthropic. A live demonstration requires enabling and checking live mode separately.
 
 | Path | Purpose |
 | --- | --- |
 | `server/reader.js` | Explicit recorded mode and live Anthropic adapter |
 | `server/policy.js` | Validation and initial action selection using the existing pathway rules |
+| `server/reply-policy.js` | Reply evidence checks, practical help and exception priority |
 | `server/store.js` | SQLite records, atomic inbox delivery, recovery and event history |
+| `server/reply-store.js` | Reply persistence, migration, deduplication and review holds |
 | `server/app.js` | HTTP API and background case worker |
 | `app/` | Local workspace interface |
 | `test/` | Tests with no model charges |

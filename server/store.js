@@ -3,6 +3,7 @@ const { randomUUID, createHash } = require('node:crypto');
 const { mkdirSync } = require('node:fs');
 const path = require('node:path');
 const { handoffDate, handoffReason } = require('./policy.js');
+const { replyStore } = require('./reply-store.js');
 
 function openStore(filename) {
   if (filename !== ':memory:') mkdirSync(path.dirname(filename), { recursive: true, mode: 0o700 });
@@ -39,9 +40,9 @@ function openStore(filename) {
     return {
       id: row.id, patient: row.patient, report: row.report, status: row.status, pathway: row.pathway,
       due: row.due, nextAction: row.next_action, read: row.read_json ? JSON.parse(row.read_json) : null,
-      model: row.model, readerMode: row.reader_mode, problems: JSON.parse(row.problems_json), createdAt: row.created_at, updatedAt: row.updated_at,
+      model: row.model, readerMode: row.reader_mode, bookingClaimed: Boolean(row.booking_claimed), replies: replyApi.listReplies(id), problems: JSON.parse(row.problems_json), createdAt: row.created_at, updatedAt: row.updated_at,
       events: db.prepare('SELECT seq,kind,detail,created_at AS createdAt FROM events WHERE case_id=? ORDER BY seq').all(id),
-      messages: db.prepare('SELECT id,body,created_at AS createdAt FROM messages WHERE case_id=? ORDER BY created_at,id').all(id),
+      messages: db.prepare('SELECT id,body,dedupe_key,created_at AS createdAt FROM messages WHERE case_id=? ORDER BY created_at,rowid').all(id).map(({ dedupe_key, ...message }) => ({ ...message, replyId: dedupe_key.split(':')[1] === 'reply' ? dedupe_key.split(':')[2] : null })),
       reviews: db.prepare('SELECT id,kind,reason,created_at AS createdAt FROM reviews WHERE case_id=?').all(id)
     };
   }
@@ -49,11 +50,13 @@ function openStore(filename) {
     const inserted = db.prepare('INSERT OR IGNORE INTO reviews(id,case_id,kind,reason,created_at) VALUES(?,?,?,?,?)').run(randomUUID(), id, kind, reason, now);
     if (inserted.changes) event(id, 'human_review_created', reason, now);
   }
-  function addMessage(id, body, now) {
-    const inserted = db.prepare('INSERT OR IGNORE INTO messages(id,case_id,dedupe_key,body,created_at) VALUES(?,?,?,?,?)').run(randomUUID(), id, id + ':initial-booking', body, now);
-    if (inserted.changes) event(id, 'test_message_sent', 'Initial booking message delivered to the local test inbox. No external message was sent.', now);
+  function addMessage(id, body, now, key = 'initial-booking') {
+    const inserted = db.prepare('INSERT OR IGNORE INTO messages(id,case_id,dedupe_key,body,created_at) VALUES(?,?,?,?,?)').run(randomUUID(), id, id + ':' + key, body, now);
+    if (inserted.changes) event(id, 'test_message_sent', (key === 'initial-booking' ? 'Initial booking message' : 'Reply assistance') + ' delivered to the local test inbox. No external message was sent.', now);
   }
+  const replyApi = replyStore({ db, transaction, event, addReview, addMessage, get });
   return {
+    ...replyApi,
     get,
     list() { return db.prepare('SELECT id,patient,status,pathway,due,model,created_at AS createdAt FROM cases ORDER BY created_at DESC,rowid DESC').all(); },
     create(patient, report, requestKey, now) {
@@ -80,6 +83,7 @@ function openStore(filename) {
           event(row.id,'read_recovered','An interrupted read was requeued after restart. Local message delivery remains deduplicated.',now);
         }
       });
+      replyApi.recoverReplies(now);
     },
     claim(now, mode) {
       return transaction(() => {
@@ -122,7 +126,7 @@ function openStore(filename) {
     },
     sendDue(now, today = now.slice(0,10)) {
       transaction(() => {
-        for (const row of db.prepare("SELECT id,status,pathway,due,next_action,read_json FROM cases WHERE status IN ('waiting_reminder','awaiting_booking')").all()) {
+        for (const row of db.prepare("SELECT id,status,pathway,due,next_action,read_json FROM cases WHERE status IN ('waiting_reminder','awaiting_booking','booking_claimed','reply_pending','reply_failed')").all()) {
           let exam = null;
           try { exam = JSON.parse(row.read_json).exam_date; } catch {}
           const handoff = handoffDate(row.pathway, exam);

@@ -5,6 +5,8 @@ const { openStore } = require('./store.js');
 const { createReader } = require('./reader.js');
 const { decide } = require('./policy.js');
 const { examples } = require('./samples.js');
+const { replyExamples } = require('./reply-samples.js');
+const { decideReply } = require('./reply-policy.js');
 
 const root = path.join(__dirname, '..');
 const staticFiles = new Map([
@@ -44,8 +46,7 @@ function createApp({ dbPath = path.join(root, '.local/cases.sqlite'), reader = c
     active = (async () => {
       store.sendDue(clock(), currentDate());
       const job = store.claim(clock(), reader.status().mode);
-      if (!job) return;
-      try {
+      if (job) try {
         const result = await reader.read(job.report);
         const decision = decide(job.report, result.read, currentDate());
         store.complete(job.id, result, decision, clock());
@@ -56,6 +57,18 @@ function createApp({ dbPath = path.join(root, '.local/cases.sqlite'), reader = c
           const safe = ['not_configured', 'connection_failed', 'provider_error', 'model_unavailable', 'unsupported_sample'].includes(e.code)
             ? e.message : 'The read could not be completed. The case is saved; retry after checking the server configuration.';
           store.fail(job.id, safe, clock());
+        }
+      }
+      const reply = store.claimReply(clock(), reader.status().mode);
+      if (reply) try {
+        const result = await reader.readReply(reply.text);
+        store.completeReply(reply.id, result, decideReply(reply.text,result.read), clock());
+      } catch (e) {
+        if (e.code === 'invalid_output') store.completeReply(reply.id, { read: null }, decideReply(reply.text,null), clock());
+        else {
+          const safe = ['not_configured', 'connection_failed', 'provider_error', 'model_unavailable', 'unsupported_sample'].includes(e.code)
+            ? e.message : 'The reply read could not be completed. The reply is saved and can be retried.';
+          store.failReply(reply.id, safe, clock());
         }
       }
     })();
@@ -85,11 +98,28 @@ function createApp({ dbPath = path.join(root, '.local/cases.sqlite'), reader = c
         if (req.headers.origin && req.headers.origin !== 'http://' + req.headers.host) return json(403, { error: 'Cross-origin writes are not allowed.' });
         if (!/^application\/json(?:;|$)/i.test(req.headers['content-type'] || '')) return json(415, { error: 'Use application/json.' });
       }
-      if (req.method === 'GET' && url.pathname === '/api/health') return json(200, { status: 'ok', reader: reader.status(), delivery: 'local_test_inbox', milestone: 'upload-read-save-message' });
+      if (req.method === 'GET' && url.pathname === '/api/health') return json(200, { status: 'ok', reader: reader.status(), delivery: 'local_test_inbox', milestone: 'report-and-reply-workflow' });
+      if (req.method === 'GET' && url.pathname === '/api/reply-examples') return json(200, replyExamples());
       if (req.method === 'GET' && url.pathname === '/api/examples') {
         return json(200, examples(currentDate()));
       }
       if (req.method === 'GET' && url.pathname === '/api/cases') return json(200, { cases: store.list() });
+      const replyRoute = url.pathname.match(/^\/api\/cases\/([0-9a-f-]{36})\/replies(?:\/([0-9a-f-]{36})\/retry)?$/);
+      if (replyRoute) {
+        if (req.method !== 'POST') return json(405, { error: 'Method not allowed.' });
+        const input = await readJson(req);
+        if (replyRoute[2]) {
+          if (!store.retryReply(replyRoute[1],replyRoute[2],clock())) return json(404, { error: 'Reply not found in this case.' });
+          return json(202, { case: store.get(replyRoute[1]) });
+        }
+        const text = typeof input?.text === 'string' ? input.text.trim() : '';
+        if (!text || text.length > 2000) return json(400, { error: 'Provide a synthetic reply of 1–2,000 characters.' });
+        const key = req.headers['idempotency-key'];
+        if (key && (typeof key !== 'string' || !/^[a-zA-Z0-9._-]{1,128}$/.test(key))) return json(400, { error: 'Invalid Idempotency-Key.' });
+        const saved = store.createReply(replyRoute[1],text,key,clock());
+        if (!saved) return json(404, { error: 'Case not found.' });
+        return json(saved.created ? 202 : 200, saved);
+      }
       const caseRoute = url.pathname.match(/^\/api\/cases\/([0-9a-f-]{36})(\/retry)?$/);
       if (caseRoute) {
         if (req.method === 'POST' && caseRoute[2]) {

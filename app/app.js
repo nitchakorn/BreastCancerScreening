@@ -1,8 +1,9 @@
 (() => {
   'use strict';
   const $ = id => document.getElementById(id);
-  const states = { queued:'Queued', reading:'Reading report', read_failed:'Read failed · retry available', needs_review:'Human review', closed:'Closed · routine', awaiting_booking:'Waiting for booking', waiting_reminder:'Reminder scheduled' };
-  let selected = null, examples = [], refreshing = false, renderedCase = '', renderedList = '';
+  const states = { queued:'Queued', reading:'Reading report', read_failed:'Read failed · retry available', needs_review:'Human review', closed:'Closed · routine', awaiting_booking:'Waiting for booking', waiting_reminder:'Reminder scheduled', reply_pending:'Reply queued · outreach paused', reply_failed:'Reply failed · outreach paused', booking_claimed:'Booking claimed · unverified' };
+  let selected = null, examples = [], replySamples = [], readerMode = 'recorded', refreshing = false, refreshRequested = false, renderedCase = '', renderedList = '';
+  const replyDrafts = new Map();
   function element(tag, text, className) {
     const node = document.createElement(tag);
     if (text !== undefined) node.textContent = text;
@@ -21,6 +22,60 @@
   function section(title) {
     const node = element('div', undefined, 'case-section'); node.append(element('h3', title)); return node;
   }
+  function renderReplies(item, inbox) {
+    const replyStates = {queued:'Queued for reading',reading:'Reading reply',read_failed:'Read failed; reply saved',processed:'Processed',review:'With human review',superseded:'Newer reply takes priority'};
+    function agentMessage(message) {
+      const box=element('div',undefined,'message');
+      box.append(element('strong','Agent · test inbox'),element('p',message.body),element('small',new Date(message.createdAt).toLocaleString()));
+      inbox.append(box);
+    }
+    item.messages.filter(message=>!message.replyId).forEach(agentMessage);
+    for (const [index,reply] of item.replies.entries()) {
+      const box=element('div',undefined,'message patient-message');
+      box.append(element('strong','Patient · test reply'),element('p',reply.text),element('small',`${replyStates[reply.status] || reply.status} · ${new Date(reply.createdAt).toLocaleString()}`));
+      if(reply.problems.length) box.append(element('p',reply.problems.join(' '),'small error'));
+      if(reply.read) {
+        const evidence=element('details');evidence.append(element('summary','Reply read · '+reply.model),element('pre',JSON.stringify(reply.read,null,2)));box.append(evidence);
+      }
+      if(reply.status==='read_failed' && item.status==='reply_failed' && index===item.replies.length-1) {
+        const retry=element('button','Retry reply read','secondary compact');retry.type='button';
+        retry.addEventListener('click',async()=>{
+          retry.disabled=true;
+          try {await api(`/api/cases/${item.id}/replies/${reply.id}/retry`,{method:'POST',headers:{'content-type':'application/json'},body:'{}'});await refresh();}
+          catch(e){showError(e.message);retry.disabled=false;}
+        });box.append(retry);
+      }
+      inbox.append(box);
+      item.messages.filter(message=>message.replyId===reply.id).forEach(agentMessage);
+    }
+  }
+  function replyComposer(item) {
+    const node=section('Reply as the patient');
+    if(!item.messages.length || item.status==='closed') {node.append(element('p','The reply box becomes available after the agent sends its first test message for an open case.','muted small'));return node;}
+    if(!replyDrafts.has(item.id)) replyDrafts.set(item.id,{text:'',key:crypto.randomUUID(),pending:false,error:''});
+    const draft=replyDrafts.get(item.id), form=element('form');
+    node.append(element('p',item.status==='needs_review' ? 'This case is with a navigator. Further replies are saved for human review; automated responses stay paused.' : readerMode==='recorded' ? 'Recorded mode recognizes these sample replies. New wording needs live mode.' : 'Live Claude reading interprets the reply; code selects any permitted response.','muted small'));
+    const sampleLabel=element('label','Try a reply');sampleLabel.htmlFor='reply-sample';
+    const sample=element('select');sample.id='reply-sample';sample.append(element('option','Choose a sample reply…'));sample.firstChild.value='';
+    for(const item of replySamples){const option=element('option',item.label);option.value=item.id;sample.append(option);}
+    const label=element('label','Patient reply');label.htmlFor='reply-text';
+    const text=element('textarea');text.id='reply-text';text.rows=3;text.maxLength=2000;text.required=true;text.value=draft.text;
+    const error=element('p',draft.error,'error');error.setAttribute('role','alert');error.hidden=!draft.error;
+    const send=element('button',draft.pending?'Saving reply…':'Send test reply');send.type='submit';send.disabled=draft.pending;
+    text.addEventListener('input',()=>{draft.text=text.value;draft.key=crypto.randomUUID();});
+    sample.addEventListener('change',()=>{const value=replySamples.find(row=>row.id===sample.value);if(value){text.value=draft.text=value.text;draft.key=crypto.randomUUID();}});
+    form.append(sampleLabel,sample,label,text,send,error);
+    form.addEventListener('submit',async event=>{
+      event.preventDefault();if(draft.pending || selected !== item.id)return;
+      draft.pending=true;send.disabled=true;error.hidden=true;draft.error='';
+      try {
+        await api(`/api/cases/${item.id}/replies`,{method:'POST',headers:{'content-type':'application/json','idempotency-key':draft.key},body:JSON.stringify({text:draft.text})});
+        draft.text='';draft.key=crypto.randomUUID();draft.pending=false;renderedCase='';await refresh();
+      }catch(e){draft.error=e.message;error.textContent=e.message;error.hidden=false;}
+      finally{draft.pending=false;send.disabled=false;}
+    });
+    node.append(form);return node;
+  }
   function renderCase(item) {
     $('detail-title').textContent = item.patient;
     $('case-state').replaceWith(Object.assign(badge(item.status), { id:'case-state' }));
@@ -30,6 +85,7 @@
       facts.append(element('dt',key),element('dd',value));
     }
     detail.append(facts);
+    if(item.bookingClaimed) detail.append(element('p','The patient reports a booking. Scheduling verification is still required; this case remains open.','notice small'));
     if (item.problems.length) {
       const list = element('ul',undefined,'problem-list');
       item.problems.forEach(problem => list.append(element('li',problem)));
@@ -46,10 +102,9 @@
     }
     const inbox = section('Test inbox');
     if (!item.messages.length) inbox.append(element('p',item.status === 'waiting_reminder' ? `The first reminder is scheduled for ${item.nextAction}.` : 'No patient message sent for this case.','muted small'));
-    for (const message of item.messages) {
-      const box = element('div',undefined,'message'); box.append(element('p',message.body),element('small',`Local test delivery · ${new Date(message.createdAt).toLocaleString()}`)); inbox.append(box);
-    }
+    renderReplies(item,inbox);
     detail.append(inbox);
+    detail.append(replyComposer(item));
     if (item.reviews.length) {
       const reviews = section('Human review queue');
       item.reviews.forEach(review => reviews.append(element('div',review.reason,'review-item')));
@@ -66,11 +121,19 @@
     activity.append(timeline); detail.append(activity);
   }
   function showError(message) { $('form-error').textContent = message; $('form-error').hidden = false; }
+  function selectCase(id) {
+    selected=id; renderedCase='';
+    $('detail-title').textContent='Loading case…';
+    $('case-state').hidden=true;
+    $('detail').replaceChildren(element('p','Loading the selected case…','empty'));
+    return refresh();
+  }
   async function refresh() {
-    if (refreshing) return;
+    if (refreshing) { refreshRequested=true; return; }
     refreshing = true;
     try {
       const [health, data] = await Promise.all([api('/api/health'),api('/api/cases')]);
+      readerMode=health.reader.mode;
       $('connection').classList.toggle('warning',!health.reader.configured || health.reader.mode === 'recorded');
       $('connection').textContent = health.reader.mode === 'recorded'
         ? 'Recorded mode · no API calls. Choose a bundled synthetic sample to exercise case storage, validation, the review queue and the test inbox. New reports need live mode.'
@@ -87,17 +150,22 @@
         const row = element('button',undefined,'case-row'); row.type = 'button'; row.setAttribute('aria-pressed',String(item.id === selected));
         const label = element('span',item.patient); label.append(element('small',item.pathway ? `${item.pathway}${item.due ? ' · due ' + item.due : ''}` : 'Waiting for a checked read'));
         row.append(label,badge(item.status));
-          row.addEventListener('click',async () => { selected = item.id; await refresh(); }); list.append(row);
+          row.addEventListener('click',() => selectCase(item.id)); list.append(row);
         }
       }
       if (selected) {
-        const item = (await api('/api/cases/' + selected)).case;
+        const requested = selected;
+        const item = (await api('/api/cases/' + requested)).case;
         const signature = JSON.stringify([item.id,item.updatedAt,item.events.length,item.messages.length]);
-        if (signature !== renderedCase) { renderCase(item); renderedCase = signature; }
+        if (item.id !== selected) refreshRequested = true;
+        else if (signature !== renderedCase) { renderCase(item); renderedCase = signature; }
       }
     } catch(e) {
       $('connection').classList.add('warning'); $('connection').textContent = 'The local agent is unavailable. Check that the server is running, then refresh.';
-    } finally { refreshing = false; }
+    } finally {
+      refreshing = false;
+      if (refreshRequested) { refreshRequested=false; refresh(); }
+    }
   }
   $('refresh').addEventListener('click',refresh);
   $('example').addEventListener('change',() => {
@@ -116,9 +184,8 @@
     $('form-status').textContent = 'Saving the report and queuing its read…';
     try {
       const saved = await api('/api/cases',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({patient:$('patient').value,report:$('report').value})});
-      selected = saved.case.id;
       $('form-status').textContent = saved.created ? 'Case saved. The agent will read it in the background; you can leave this page open or return later.' : 'This report already has a saved case. Showing its current state.';
-      await refresh();
+      await selectCase(saved.case.id);
     } catch(e) { showError(e.message); $('form-status').textContent = ''; }
     finally { $('submit').disabled = false; }
   });
@@ -126,6 +193,7 @@
     examples = data;
     for (const sample of examples) { const option = element('option',sample.label); option.value = sample.id; $('example').append(option); }
   }).catch(() => showError('Samples could not be loaded. You can still paste a synthetic report.'));
+  api('/api/reply-examples').then(data=>{replySamples=data;renderedCase='';refresh();}).catch(()=>showError('Reply samples could not be loaded. Refresh to try again.'));
   refresh();
   setInterval(() => { if (!document.hidden) refresh(); },2000);
 })();
