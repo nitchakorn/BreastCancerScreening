@@ -313,3 +313,15 @@ test('a new report that changes the plan drops an old booking instead of remindi
   assert(!item.messages.some(m => /^Reminder: your appointment/.test(m.body)));
   assert(!item.events.some(e => e.kind === 'appt'));
 });
+
+test('while a person has the case, the agent reads her replies but does not answer them', async t => {
+  const w = await workspace(t);
+  const id = await w.start('Priya S.', 'P7-dx');
+  await w.reply(id, reply('P7-r1'));
+  const sent = (await w.get(id)).messages.length;
+  const item = await w.reply(id, reply('P3-r1'));
+  assert.equal(item.status, 'needs_review');
+  assert.equal(item.messages.length, sent, 'no ride offer while the navigator has her');
+  assert(item.events.some(e => /has this case, so the agent doesn't answer/.test(e.detail)));
+  assert.equal(item.reviews.filter(r => r.status === 'open').length, 1);
+});

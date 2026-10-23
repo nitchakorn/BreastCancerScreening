@@ -753,6 +753,8 @@ Reply with only a JSON object in this shape, no other text:
       var quoteOk = !!(r && r.quote && reply.text.indexOf(r.quote) >= 0);
       log(c, day, "agent", "readreply", "Claude read her reply: " + (r ? r.summary : "no answer") + " Labels: " + labels.join(", ") + ".", { reply: reply.id, short: "Read her reply", labels: labels });
       if (c.step) { c.step.replied = true; c.step.lastContact = day; }
+      // While a person has the case, the agent doesn't answer her. The person sees the reply.
+      if (c.person && c.person.kind !== "surgery") { log(c, day, "agent", "note", "The " + c.person.who.toLowerCase() + " has this case, so the agent doesn't answer. Her reply is there for them.", { short: "Left her reply for the person" }); return; }
       if (!quoteOk) return handoff(c, day, "Nurse navigator", "Claude's quote didn't match her message, so a person reads it.", "Reply needs a person", "exception");
       var exc = labels.filter(function (l) { return EXCEPTIONS[l]; });
       if (exc.length) return handoff(c, day, "Nurse navigator", EXCEPTIONS[exc[0]] + ". A person takes it from here.", EXCEPTIONS[exc[0]] + ", sent to navigator", "exception");

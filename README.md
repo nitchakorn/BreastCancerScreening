@@ -43,7 +43,7 @@ The public page `docs/workspace.html` is the same workspace running in the brows
 | --- | --- |
 | Start a case with a report | Claude reads it, code checks every quote, and the rules set the pathway, the due date and the day a person takes over |
 | Move the clock | Runs its daily check for every day in between: texts, portal messages, calls, check-ins, reminders, overdue notes and handoffs |
-| Reply as the patient | Claude labels the reply and quotes it, and code checks the quote. No ride gets a ride offer, another time gets open slots, and a booking claim gets checked against the schedule. Fear, medical questions, refusals, wrong numbers and unclear replies go to the navigator |
+| Reply as the patient | Claude labels the reply and quotes it, and code checks the quote. No ride gets a ride offer, another time gets open slots, and a booking claim gets checked against the schedule. Fear, medical questions, refusals, wrong numbers and unclear replies go to the navigator. While a person has the case, the agent reads her replies but doesn't answer them |
 | Book in the test schedule | Trusts the schedule over what she says, texts a reminder the day before, and marks the appointment done on the day |
 | Add the next report | Reads and checks it like the first one. A result can close the case, start a biopsy pathway or release a radiologist hold |
 | Act as the navigator or radiologist | Hand the case back to the agent, book for her, confirm that benign pathology matches the imaging, or close the case with a note |
