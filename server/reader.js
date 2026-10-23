@@ -1,38 +1,38 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { recordedRead, recordedReply } = require('./samples.js');
+const A = require('../agent/agent.js');
+const { recordedComparison, recordedReply } = require('./samples.js');
 
-const documentPrompt = fs.readFileSync(path.join(__dirname, '../prompts/read_document.txt'), 'utf8');
+/*
+  Reports are read by rules (agent/agent.js, readReport), the same way in every mode, with no model.
+  Claude does the two jobs that need judgment: reading her replies, and comparing a pathology report
+  with the imaging report that led to the biopsy. Code checks every quote it returns.
+*/
+const comparePrompt = fs.readFileSync(path.join(__dirname, '../prompts/compare_reports.txt'), 'utf8');
 const replyPrompt = fs.readFileSync(path.join(__dirname, '../prompts/read_reply.txt'), 'utf8');
 const nullableString = { type: ['string', 'null'] };
-const documentSchema = {
+const comparisonSchema = {
   type: 'object', additionalProperties: false,
   properties: {
-    doc_type: { type: 'string', enum: ['screening', 'diagnostic', 'ultrasound', 'addendum', 'pathology'] },
-    exam_date: nullableString,
-    side: { type: ['string', 'null'], enum: ['left', 'right', 'both', null] },
-    birads: nullableString, next_step: nullableString,
-    findings_match_impression: { type: ['boolean', 'null'] },
-    mismatch_quote: nullableString, pathology_result: nullableString, diagnosis: nullableString,
-    breasts: {
-      type: 'array',
-      items: {
-        type: 'object', additionalProperties: false,
-        properties: {
-          side: { type: 'string', enum: ['left', 'right'] }, birads: { type: 'string' }, next_step: nullableString,
-          quotes: { type: 'object', additionalProperties: false, properties: { birads: { type: 'string' }, next_step: nullableString }, required: ['birads', 'next_step'] }
-        },
-        required: ['side', 'birads', 'next_step', 'quotes']
-      }
-    },
-    quotes: {
+    imaging: {
       type: 'object', additionalProperties: false,
-      properties: { exam_date: nullableString, birads: nullableString, next_step: nullableString, pathology_result: nullableString },
-      required: ['exam_date', 'birads', 'next_step', 'pathology_result']
-    }
+      properties: {
+        side: { type: ['string', 'null'], enum: ['left', 'right', null] }, size: nullableString, margins: nullableString, birads: nullableString,
+        quotes: { type: 'object', additionalProperties: false, properties: { size: nullableString, margins: nullableString, birads: nullableString }, required: ['size', 'margins', 'birads'] }
+      },
+      required: ['side', 'size', 'margins', 'birads', 'quotes']
+    },
+    pathology: { type: 'object', additionalProperties: false, properties: { diagnosis: { type: 'string' }, quote: { type: 'string' } }, required: ['diagnosis', 'quote'] },
+    match: { type: 'string', enum: ['concordant', 'possible_mismatch', 'unclear'] },
+    flags: {
+      type: 'array',
+      items: { type: 'object', additionalProperties: false, properties: { concern: { type: 'string' }, imaging_quote: { type: 'string' }, pathology_quote: { type: 'string' } }, required: ['concern', 'imaging_quote', 'pathology_quote'] }
+    },
+    summary: { type: 'string' }
   },
-  required: ['doc_type', 'exam_date', 'side', 'birads', 'next_step', 'findings_match_impression', 'mismatch_quote', 'pathology_result', 'diagnosis', 'breasts', 'quotes']
+  required: ['imaging', 'pathology', 'match', 'flags', 'summary']
 };
+const pairText = (imaging, pathology) => `IMAGING REPORT:\n${imaging}\n\nPATHOLOGY REPORT:\n${pathology}`;
 const REPLY_LABELS = ['booked', 'wants_new_time', 'transport_barrier', 'other_barrier', 'scared_or_worried', 'medical_question', 'declines_care', 'wrong_number', 'other'];
 const replySchema = {
   type: 'object', additionalProperties: false,
@@ -44,8 +44,8 @@ const replySchema = {
   required: ['labels', 'quote', 'summary']
 };
 const KINDS = {
-  report: { prompt: documentPrompt, schema: documentSchema, tool: 'record_report', intro: 'Read this synthetic report:\n\n', what: 'report', recorded: recordedRead,
-    toolHelp: 'Return the extracted report facts and verbatim evidence for code validation. This tool does not send messages or decide a pathway.' },
+  compare: { prompt: comparePrompt, schema: comparisonSchema, tool: 'record_comparison', intro: 'Compare these two synthetic reports:\n\n', what: 'pair of reports',
+    toolHelp: 'Return the side-by-side summary, whether the result may not match, and each concern with verbatim quotes for code validation. This tool does not decide or message anyone.' },
   reply: { prompt: replyPrompt, schema: replySchema, tool: 'record_reply', intro: 'Read this synthetic patient reply:\n\n', what: 'reply', recorded: recordedReply,
     toolHelp: 'Return the reply labels, a verbatim quote and a short summary for code validation. This tool does not answer the patient or decide what happens next.' }
 };
@@ -86,9 +86,28 @@ function claudeCodeReader({ env, spawnImpl }) {
     child.stdin.on('error', () => {});
     child.stdin.end(k.intro + text);
   });
-  return {
+  return withRules({
     status() { return { mode: 'claude-code', configured: true, model: env.ANTHROPIC_MODEL || 'Your Claude Code sign-in' }; },
-    read: read('report'), readReply: read('reply')
+    compare: read('compare'), readReply: read('reply')
+  });
+}
+
+// Every mode reads reports the same way: by rule. When the report is pathology and the case has an imaging
+// report, Claude compares the two. A comparison that can't be made never blocks the case: a person reviews it.
+function withRules(reader) {
+  return {
+    status: reader.status, readReply: reader.readReply,
+    async read(text, context = {}) {
+      const read = A.readReport(text);
+      let comparison = null;
+      if (read.doc_type === 'pathology' && context.imaging) {
+        try {
+          const result = await reader.compare(pairText(context.imaging, text), { imaging: context.imaging, pathology: text });
+          comparison = { read: result.read, model: result.model, mode: result.mode, imaging: context.imaging };
+        } catch (e) { comparison = { error: e instanceof ReaderError ? e.message : 'The comparison could not be made.' }; }
+      }
+      return { read, mode: 'rules', model: 'Report rules · no model', comparison };
+    }
   };
 }
 
@@ -97,17 +116,19 @@ function createReader({ env = process.env, fetchImpl = fetch, spawnImpl = null }
   if (!['live', 'recorded', 'claude-code'].includes(mode)) throw new Error('READER_MODE must be recorded, live or claude-code.');
   if (mode === 'claude-code') return claudeCodeReader({ env, spawnImpl });
   if (mode === 'recorded') {
-    const recorded = kind => async text => {
-      const read = KINDS[kind].recorded(text);
-      if (!read) throw new ReaderError('unsupported_sample', kind === 'report'
-        ? 'Recorded mode recognizes only the bundled synthetic reports (with updated dates). Select a sample, or enable live mode later for a new report.'
-        : 'Recorded mode recognizes only the bundled sample replies. Pick one from the list, or enable live mode later to read any reply.');
-      return { read, mode: 'recorded', model: 'Recorded sample · no API call', usage: null };
-    };
-    return {
+    return withRules({
       status() { return { mode: 'recorded', configured: true, model: 'Recorded sample reads · no API call' }; },
-      read: recorded('report'), readReply: recorded('reply')
-    };
+      async compare(text, pair) {
+        const read = recordedComparison(pair.imaging, pair.pathology);
+        if (!read) throw new ReaderError('unsupported_sample', 'Recorded mode has Claude’s comparison only for the sample pairs (a sample imaging report and the pathology that follows it). Live mode compares any two reports.');
+        return { read, mode: 'recorded', model: 'Recorded sample · no API call', usage: null };
+      },
+      async readReply(text) {
+        const read = recordedReply(text);
+        if (!read) throw new ReaderError('unsupported_sample', 'Recorded mode recognizes only the bundled sample replies. Pick one from the list, or enable live mode later to read any reply.');
+        return { read, mode: 'recorded', model: 'Recorded sample · no API call', usage: null };
+      }
+    });
   }
   let discoveredModel;
   const configured = () => Boolean(env.ANTHROPIC_API_KEY?.trim());
@@ -154,10 +175,10 @@ function createReader({ env = process.env, fetchImpl = fetch, spawnImpl = null }
     if (!tool || response.stop_reason === 'max_tokens') throw new ReaderError('invalid_output', `Claude did not return a complete structured ${k.what}. A person must review this case.`);
     return { read: tool.input, mode: 'live', model: response.model || model, usage: response.usage || null };
   };
-  return {
+  return withRules({
     status() { return { mode: 'live', configured: configured(), model: env.ANTHROPIC_MODEL || discoveredModel || 'Discover an available Sonnet model on first read' }; },
-    read: live('report'), readReply: live('reply')
-  };
+    compare: live('compare'), readReply: live('reply')
+  });
 }
 
 module.exports = { createReader, ReaderError, REPLY_LABELS };

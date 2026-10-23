@@ -83,6 +83,12 @@ footer { margin-top:30px; padding-top:20px; border-top:1px solid var(--line); co
 .tracks { margin-top:16px; padding:12px 14px; border:1px solid var(--line); border-radius:9px; display:grid; gap:8px; }
 .track { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:14px; }
 .track span:first-child { flex:1 1 220px; }
+.comparison { margin-top:16px; padding:12px 14px; border:1px solid var(--line); border-radius:9px; display:grid; gap:8px; font-size:14px; }
+.comparison table { width:100%; border-collapse:collapse; }
+.comparison th, .comparison td { text-align:left; vertical-align:top; padding:4px 8px 4px 0; border-bottom:1px solid var(--line); }
+.comparison thead th, .comparison tbody th { color:var(--muted); font-weight:500; }
+.comparison tbody th { white-space:nowrap; }
+.comparison p { margin:0; }
 /* demo clock */
 .clock { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:14px 24px; margin-bottom:22px; padding:18px 24px; }
 .clock-date { font-size:22px; font-weight:700; letter-spacing:-.02em; margin:2px 0 4px; }
@@ -179,7 +185,7 @@ mark.warn { background:var(--warn-bg); color:var(--warn); }
             <label for="report">Report text</label>
             <textarea id="report" name="report" rows="10" minlength="30" maxlength="20000" placeholder="Paste a synthetic imaging or pathology report…" required></textarea>
             <button type="submit" id="submit">Read report &amp; start case</button>
-            <p class="muted small">Recorded mode uses the bundled samples without an API call. Live mode uses your Claude API account. Cases are saved before reading. Test messages use the first name in the label.</p>
+            <p class="muted small">Rules read every report, in every mode, with no model, so any report works. Claude reads her replies and compares biopsy results with the imaging: recorded for the samples, or live with your Claude account. Cases are saved before reading. Test messages use the first name in the label.</p>
             <p id="form-status" role="status"></p>
             <p id="form-error" class="error" role="alert" hidden></p>
           </form>
@@ -205,6 +211,7 @@ mark.warn { background:var(--warn-bg); color:var(--warn); }
             <div class="person-actions">
               <button type="button" id="resume" class="secondary compact" hidden>Hand back to the agent</button>
               <button type="button" id="concordant" class="compact" hidden>Confirm it matches the imaging</button>
+              <button type="button" id="discordant" class="secondary compact" hidden>Doesn’t match: repeat biopsy</button>
               <span class="muted small" id="person-hint"></span>
             </div>
             <form id="close-form" class="inline-form">
@@ -213,6 +220,7 @@ mark.warn { background:var(--warn-bg); color:var(--warn); }
             </form>
             <p id="person-error" class="error" role="alert" hidden></p>
           </div>
+          <div id="comparison" class="comparison" hidden></div>
 
           <div class="case-section">
             <h3>Coming up <span class="muted small">deadlines are placeholders for clinical review</span></h3>
@@ -258,12 +266,12 @@ mark.warn { background:var(--warn-bg); color:var(--warn); }
         </div>
       </section>
     </div>
-    <footer><p>This page runs the local workspace in your browser: the same page, engine and server code, with SQLite compiled to WebAssembly (sql.js) and Claude’s recorded reads. Your cases stay in this browser. <a href="https://github.com/nitchakorn/BreastCancerScreening#local-agent-workspace">Run it with live Claude reads</a>.</p><p>The workspace runs the same engine as the simulation (agent/agent.js), and a test replays all ten simulated patients through it to check that the agent makes the same decisions on the same days, for each breast.</p><p>Not for clinical use. No real patient messages, bookings or EHR writes. This local workspace has no user authentication.</p></footer>
+    <footer><p>This page runs the local workspace in your browser: the same page, engine and server code, with SQLite compiled to WebAssembly (sql.js). Rules read every report, so any report works. Claude’s reads of the sample replies and its comparisons of the sample reports were recorded earlier. Your cases stay in this browser. <a href="https://github.com/nitchakorn/BreastCancerScreening#local-agent-workspace">Run it with live Claude reads</a>.</p><p>The workspace runs the same engine as the simulation (agent/agent.js), and a test replays all ten simulated patients through it to check that the agent makes the same decisions on the same days, for each breast.</p><p>Not for clinical use. No real patient messages, bookings or EHR writes. This local workspace has no user authentication.</p></footer>
   </main>
 <script src="https://cdn.jsdelivr.net/npm/sql.js@1.14.2/dist/sql-wasm.js"></script>
 <script>
 window.WorkspaceModules = (function () {
-  var prompts = {"read_document.txt":"You are the reading step of a breast imaging follow-up agent.\n\nYou will get one breast imaging report, report addendum, or pathology report. Report what it says. You do not decide what happens next. Code does that after you.\n\nRules:\n1. Only report what the document says. Never guess. Use null when something is not stated.\n2. Copy every quote word for word from the document. Use the shortest span that proves the fact.\n3. \"birads\" is the assessment category stated in the IMPRESSION (or the corrected impression of an addendum), written as it appears: \"0\", \"1\", \"2\", \"3\", \"4\", \"4A\", \"4B\", \"4C\", \"5\" or \"6\". When the impression also gives an overall assessment, use the overall one.\n4. \"findings_match_impression\" is false when the FINDINGS describe something the impression's category does not account for, for example a mass or suspicious calcifications in a report whose impression is negative or benign. Otherwise true. Use null for pathology reports.\n5. \"mismatch_quote\" is the exact words from the findings that conflict with the impression, or null.\n6. For pathology, \"pathology_result\" is one of: malignant, benign, atypia, nondiagnostic.\n7. \"side\" is the breast that needs follow-up: \"left\" or \"right\". Use \"both\" when both breasts need follow-up, or when an exam of both breasts is negative or benign. For pathology, the breast that was biopsied.\n8. \"breasts\" lists one entry per breast only when the impression gives each breast its own BI-RADS assessment. Each entry has that breast's side, category, recommendation and quotes. Otherwise use an empty list.\n\nReply with only a JSON object in this shape, no other text:\n{\n  \"doc_type\": \"screening | diagnostic | ultrasound | addendum | pathology\",\n  \"exam_date\": \"YYYY-MM-DD (the exam or procedure date)\",\n  \"side\": \"left | right | both | null\",\n  \"birads\": \"category as written, or null\",\n  \"next_step\": \"the recommendation in a few words, or null\",\n  \"findings_match_impression\": true,\n  \"mismatch_quote\": null,\n  \"pathology_result\": \"malignant | benign | atypia | nondiagnostic, or null\",\n  \"diagnosis\": \"pathology diagnosis in a few words, or null\",\n  \"breasts\": [\n    {\n      \"side\": \"left | right\",\n      \"birads\": \"category as written\",\n      \"next_step\": \"the recommendation for this breast in a few words, or null\",\n      \"quotes\": { \"birads\": \"exact words\", \"next_step\": \"exact words, or null\" }\n    }\n  ],\n  \"quotes\": {\n    \"exam_date\": \"exact words\",\n    \"birads\": \"exact words, or null\",\n    \"next_step\": \"exact words, or null\",\n    \"pathology_result\": \"exact words, or null\"\n  }\n}\n","read_reply.txt":"You are reading a patient's text-message reply for a breast imaging follow-up agent. The agent had texted her a link to book her next breast imaging appointment or biopsy.\n\nSay what she is telling us. You do not reply to her and you do not decide what happens next. Code does that after you.\n\nPick every label that applies:\n- booked: she says she booked or scheduled\n- wants_new_time: she asks for a different day or time\n- transport_barrier: she has no way to get to the appointment\n- other_barrier: another practical problem, such as cost, childcare or work\n- scared_or_worried: she says she is afraid, anxious or worried\n- medical_question: she asks a medical question\n- declines_care: she says she does not want the test or procedure\n- wrong_number: the message reached the wrong person\n- other: none of the above\n\nCopy \"quote\" word for word from her message, the shortest span that supports the labels.\n\nReply with only a JSON object in this shape, no other text:\n{\"labels\": [\"...\"], \"quote\": \"exact words\", \"summary\": \"one short plain-language sentence\"}\n"};
+  var prompts = {"compare_reports.txt":"You are helping a breast radiologist with radiology-pathology correlation. You get two reports about the same patient: the breast imaging report that led to a biopsy, and the pathology report from that biopsy.\n\nWrite a short chart summary that puts the two side by side, and point out anything that may not match. You do not decide. The radiologist decides whether the result matches the imaging. You never write to the patient.\n\nWhat to return:\n- imaging: the biopsied finding as the imaging report describes it. Its breast (\"left\" or \"right\"), its size, its margins or shape, and its BI-RADS category. Copy the words for size, margins and BI-RADS into \"quotes\" exactly as they appear in the imaging report. Use null for anything the report doesn't say.\n- pathology: the diagnosis in plain words, and \"quote\", the diagnosis copied exactly from the pathology report.\n- match: \"concordant\" when the diagnosis is a reasonable explanation for the imaging finding. \"possible_mismatch\" when it may not be. \"unclear\" when the reports don't give enough to compare.\n- flags: one entry for each concern. Each has \"concern\", one plain sentence, plus \"imaging_quote\" and \"pathology_quote\", the exact words from each report that the concern rests on. Leave the list empty when nothing looks off.\n- summary: two or three plain sentences a radiologist can read in ten seconds.\n\nHow to judge:\n1. A benign result that doesn't specifically explain a suspicious finding is a possible mismatch. Suspicious means things like an irregular shape, spiculated, angular or indistinct margins, architectural distortion, or BI-RADS 4C or 5. A specific benign diagnosis that fits the finding, like a fibroadenoma in an oval circumscribed mass, usually matches.\n2. Flag it if the reports describe a different breast or a different location.\n3. A cancer diagnosis in a suspicious finding matches. Say so plainly.\n\nRules:\n1. Copy every quote exactly, character for character. Code checks each quote against the report it came from, and a quote that doesn't match is thrown out.\n2. Keep dates out of the quotes and the summary.\n3. Don't recommend treatment and don't tell anyone a result.\n\nReply with only a JSON object in this shape, no other text:\n{\"imaging\": {\"side\": \"left\", \"size\": \"...\", \"margins\": \"...\", \"birads\": \"4C\", \"quotes\": {\"size\": \"exact words\", \"margins\": \"exact words\", \"birads\": \"exact words\"}}, \"pathology\": {\"diagnosis\": \"...\", \"quote\": \"exact words\"}, \"match\": \"concordant\", \"flags\": [{\"concern\": \"...\", \"imaging_quote\": \"exact words\", \"pathology_quote\": \"exact words\"}], \"summary\": \"...\"}\n","read_reply.txt":"You are reading a patient's text-message reply for a breast imaging follow-up agent. The agent had texted her a link to book her next breast imaging appointment or biopsy.\n\nSay what she is telling us. You do not reply to her and you do not decide what happens next. Code does that after you.\n\nPick every label that applies:\n- booked: she says she booked or scheduled\n- wants_new_time: she asks for a different day or time\n- transport_barrier: she has no way to get to the appointment\n- other_barrier: another practical problem, such as cost, childcare or work\n- scared_or_worried: she says she is afraid, anxious or worried\n- medical_question: she asks a medical question\n- declines_care: she says she does not want the test or procedure\n- wrong_number: the message reached the wrong person\n- other: none of the above\n\nCopy \"quote\" word for word from her message, the shortest span that supports the labels.\n\nReply with only a JSON object in this shape, no other text:\n{\"labels\": [\"...\"], \"quote\": \"exact words\", \"summary\": \"one short plain-language sentence\"}\n"};
   var shims = {
     "node:sqlite": {}, "node:crypto": {},
     "node:fs": { readFileSync: function (p) { return prompts[String(p).split("/").pop()]; }, existsSync: function () { return false; } },
@@ -274,10 +282,15 @@ window.WorkspaceModules = (function () {
 /*
   Breast screening follow-up agent: the rules and a day-by-day simulation.
 
-  Claude reads every report and every patient reply (scripts/read.js saves those
-  reads in reads/). Everything in this file is plain code. It checks Claude's
-  reads, picks the pathway, sets the due date, decides each outreach step, and
-  hands a case to a person only when a rule says so.
+  Everything in this file is plain code. Rules read each report (readReport): the
+  BI-RADS category, the exam date, which breast and the recommendation. Rules pick
+  the pathway, set the due date, decide each outreach step, and hand a case to a
+  person only when a rule says so.
+
+  Claude does the two jobs that need judgment (scripts/read.js saves those reads
+  in reads/): it reads her text replies, and when a biopsy result comes back it
+  compares the pathology report with the imaging report and flags anything that
+  may not match. Code checks every quote Claude gives. A radiologist decides.
 
   The simulated world (when a patient replies, books, or what a navigator does)
   comes from data/patients.json. The agent never sees that script. It only sees
@@ -361,9 +374,166 @@ window.WorkspaceModules = (function () {
   }
   function catOf(b) { return b === "1" || b === "2" ? "1-2" : b === "0" ? "0" : b === "3" ? "3" : b === "4" || b === "5" ? "4-5" : "unclear"; }
 
+  /* ---------- reading a report by rule (step 2) ---------- */
+  /*
+    Reports follow a fixed layout: EXAM, DATE, FINDINGS, IMPRESSION, RECOMMENDATION, or for
+    pathology SPECIMEN, PROCEDURE DATE, DIAGNOSIS. These rules read that layout the same way
+    every time and never guess. When a report doesn't fit them, the read says why in "unclear"
+    and the case goes to a radiologist. Every value comes with the exact words it was read from.
+  */
+  var LABEL = /^([A-Z][A-Z ]*[A-Z]):\s*(.*)$/;
+  var GROWS = ["FINDINGS", "IMPRESSION", "CORRECTED IMPRESSION", "RECOMMENDATION", "DIAGNOSIS", "COMMENT", "INDICATION", "HISTORY"];
+  var CATEGORY = /BI-RADS\s*(?:category\s*)?:?\s*([0-6][ABC]?)\b/gi;
+  var FINDING = /\b(mass(?:es)?|asymmetr(?:y|ies)|calcifications?|distortion|lesions?|nodules?)\b/gi;
+  var NEGATED = /\b(no|not|without|negative for)\b/i;
+
+  // The report's labeled sections. A line without a label belongs to the section above it.
+  function sectionsOf(text) {
+    var out = {}, last = null;
+    String(text || "").replace(/\r\n?/g, "\n").split("\n").forEach(function (raw, i) {
+      var line = raw.trim(), m = line.match(LABEL);
+      if (!line) return;
+      if (i === 0 && /^ADDENDUM\b/.test(line)) { last = "ADDENDUM"; out.ADDENDUM = { line: line, value: line, lines: [] }; return; }
+      if (!m && /^[A-Z][A-Z ]+$/.test(line)) { last = "HEADER"; out.HEADER = { line: line, value: line, lines: [] }; return; }
+      if (m && !out[m[1]]) { last = m[1]; out[last] = { line: line, value: m[2], lines: m[2] ? [m[2]] : [] }; return; }
+      if (last && GROWS.indexOf(last) >= 0) { out[last].lines.push(line); return; }
+      (out.NOTE = out.NOTE || { line: line, value: "", lines: [] }).lines.push(line);
+    });
+    return out;
+  }
+  // Sentences, split at a period followed by a space, so "1.3 cm" stays whole.
+  function sentencesOf(s) { return (String(s || "").match(/(?:[^.]|\.(?=\S))+\.?/g) || []).map(function (x) { return x.trim(); }).filter(Boolean); }
+  function sideIn(s) {
+    var right = /\bright\b/i.test(s || ""), left = /\bleft\b/i.test(s || "");
+    return right !== left ? (right ? "right" : "left") : null;
+  }
+  function isoFrom(s) {
+    var m = String(s || "").match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
+    if (!m) return null;
+    var iso = m[3] + "-" + m[1] + "-" + m[2], d = new Date(iso + "T12:00:00Z");
+    return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso ? iso : null;
+  }
+  function categoriesIn(s) {
+    var out = [], m, re = new RegExp(CATEGORY.source, "gi");
+    while ((m = re.exec(s))) out.push(m[1].toUpperCase());
+    return out;
+  }
+  function urgencyOf(b) { var p = pathwayFor(normBirads(b)); return p in URGENCY ? URGENCY[p] : -1; }
+  function noPeriod(s) { return s ? s.replace(/\.$/, "") : s; }
+
+  function readReport(text) {
+    var sec = sectionsOf(text), unclear = [];
+    var r = { doc_type: null, exam_date: null, side: null, birads: null, next_step: null, findings_match_impression: null, mismatch_quote: null,
+      pathology_result: null, diagnosis: null, breasts: [], quotes: { exam_date: null, birads: null, next_step: null, pathology_result: null }, unclear: unclear, reader: "rules" };
+    var exam = sec.EXAM ? sec.EXAM.value : "";
+    r.doc_type = (sec.HEADER && /PATHOLOGY/.test(sec.HEADER.line)) || (sec.DIAGNOSIS && sec.SPECIMEN) ? "pathology"
+      : sec.ADDENDUM || sec["CORRECTED IMPRESSION"] ? "addendum"
+      : /screening/i.test(exam) ? "screening" : /diagnostic/i.test(exam) ? "diagnostic" : /ultrasound/i.test(exam) ? "ultrasound" : null;
+    if (!r.doc_type) { unclear.push("The rules don't recognize this kind of report."); return r; }
+
+    // The exam date. An addendum counts from the exam it corrects.
+    var dateLine = r.doc_type === "pathology" ? sec["PROCEDURE DATE"] : r.doc_type === "addendum" ? (isoFrom(sec.ADDENDUM && sec.ADDENDUM.line) ? sec.ADDENDUM : sec["DATE OF ADDENDUM"]) : sec.DATE;
+    r.exam_date = dateLine ? isoFrom(dateLine.line) : null;
+    if (r.exam_date) r.quotes.exam_date = dateLine.line; else unclear.push("No valid exam date.");
+
+    if (r.doc_type === "pathology") {
+      r.side = sec.SPECIMEN ? sideIn(sec.SPECIMEN.value) : null;
+      var dx = sec.DIAGNOSIS;
+      if (!dx || !dx.value) { unclear.push("No diagnosis."); return r; }
+      // Phrases that rule something out ("Negative for atypia and malignancy") don't count as findings.
+      var kept = dx.lines.join(" ").replace(/\b(negative for|no evidence of|without|no)\b[^.;]*/gi, " ");
+      var highRisk = /lobular carcinoma in situ|\bLCIS\b|atypi/i.test(kept);
+      kept = kept.replace(/lobular carcinoma in situ/gi, " ");
+      r.pathology_result = /carcinoma|malignan|sarcoma|lymphoma|\bDCIS\b/i.test(kept) ? "malignant" : highRisk ? "atypia"
+        : /non-?diagnostic|insufficient|inadequate/i.test(kept) ? "nondiagnostic"
+        : /benign|fibroadenoma|fibrocystic|fat necrosis|stromal fibrosis|\bcysts?\b/i.test(kept) ? "benign" : null;
+      if (!r.pathology_result) unclear.push("The diagnosis isn't one the rules know.");
+      r.quotes.pathology_result = dx.value;
+      r.diagnosis = sentencesOf(dx.lines.join(" ")).map(function (s, i) { s = noPeriod(s); return i ? s.charAt(0).toLowerCase() + s.slice(1) : s; }).join(", ");
+      return r;
+    }
+
+    // The BI-RADS category, from the impression. Numbered impression lines can assess each breast on its own.
+    var imp = sec["CORRECTED IMPRESSION"] || sec.IMPRESSION, overall = sec["OVERALL ASSESSMENT"];
+    var items = imp ? (imp.lines.length > 1 ? imp.lines : [imp.lines.join(" ")]).map(function (l) { return l.replace(/^\d+\.\s*/, ""); }) : [];
+    var found = [];
+    items.forEach(function (item) {
+      categoriesIn(item).forEach(function (cat) {
+        var said = sentencesOf(item).filter(function (s) { return categoriesIn(s).length; })[0];
+        found.push({ cat: cat, side: sideIn(item), item: item, sentence: said });
+      });
+    });
+    var overallCat = overall ? categoriesIn(overall.value)[0] || null : null;
+    var cats = found.map(function (f) { return f.cat; }).filter(function (c, i, a) { return a.indexOf(c) === i; });
+    var rec = sec.RECOMMENDATION ? sentencesOf(sec.RECOMMENDATION.value) : [];
+    if (!found.length && !overallCat) unclear.push("No BI-RADS category in the impression.");
+    else if (cats.length > 1 || (found.length > 1 && found.every(function (f) { return f.side; }) && found[0].side !== found[1].side)) {
+      // More than one category: fine only when each one names its own breast.
+      if (!found.every(function (f) { return f.side; })) unclear.push("The impression gives more than one BI-RADS category without saying which breast each is for.");
+      else {
+        var bySide = {};
+        found.forEach(function (f) {
+          if (bySide[f.side] && bySide[f.side].birads !== f.cat) unclear.push("The " + f.side + " breast has two different BI-RADS categories.");
+          var step = rec.filter(function (s) { return sideIn(s) === f.side; })[0] || null;
+          bySide[f.side] = bySide[f.side] || { side: f.side, birads: f.cat, next_step: noPeriod(step), quotes: { birads: f.item, next_step: step } };
+        });
+        r.breasts = ["right", "left"].filter(function (s) { return bySide[s]; }).map(function (s) { return bySide[s]; });
+        var worst = r.breasts.slice().sort(function (a, b) { return urgencyOf(a.birads) - urgencyOf(b.birads); })[0];
+        if (overallCat && urgencyOf(overallCat) > urgencyOf(worst.birads)) unclear.push("The overall assessment is less urgent than the " + worst.side + " breast's category.");
+        r.birads = overallCat || worst.birads;
+        r.quotes.birads = overallCat ? overall.line : worst.quotes.birads;
+        if (r.breasts.length < 2) r.breasts = [];
+      }
+    } else {
+      r.birads = cats[0] || overallCat;
+      if (overallCat && cats[0] && overallCat !== cats[0]) unclear.push("The overall assessment and the impression give different categories.");
+      r.quotes.birads = found.length ? found[0].sentence : overall.line;
+    }
+
+    // Which breast: the exam names it, or for an addendum, the recommendation does.
+    r.side = /bilateral/i.test(exam) ? "both" : sideIn(exam) || sideIn(rec[0]) || (imp ? sideIn(imp.lines.join(" ")) : null);
+    r.next_step = noPeriod(rec[0]) || null;
+    r.quotes.next_step = rec[0] || null;
+
+    // A negative report (BI-RADS 1) whose findings describe something that isn't ruled out doesn't add up.
+    r.findings_match_impression = true;
+    if (normBirads(r.birads) === "1" && sec.FINDINGS) {
+      sentencesOf(sec.FINDINGS.lines.join(" ")).forEach(function (s) {
+        var m, re = new RegExp(FINDING.source, "gi");
+        while ((m = re.exec(s))) {
+          if (!NEGATED.test(s.slice(0, m.index)) && r.findings_match_impression) { r.findings_match_impression = false; r.mismatch_quote = s; }
+        }
+      });
+    }
+    return r;
+  }
+
+  /* ---------- checking Claude's radiology-pathology comparison ---------- */
+  // Every quote must be in the report it came from, word for word. A comparison that fails is not used.
+  function checkComparison(x, imaging, pathology) {
+    var problems = [];
+    if (!x || typeof x !== "object") return ["No comparison came back."];
+    var has = function (text, q) { return typeof q === "string" && q.trim() !== "" && String(text).indexOf(q) >= 0; };
+    if (["concordant", "possible_mismatch", "unclear"].indexOf(x.match) < 0) problems.push("The comparison doesn't say whether the reports match.");
+    var iq = (x.imaging && x.imaging.quotes) || {};
+    Object.keys(iq).forEach(function (k) { if (iq[k] !== null && iq[k] !== undefined && !has(imaging, iq[k])) problems.push("The imaging " + k + " quote isn't in the imaging report word for word."); });
+    if (!x.pathology || !has(pathology, x.pathology.quote)) problems.push("The diagnosis quote isn't in the pathology report word for word.");
+    var flags = Array.isArray(x.flags) ? x.flags : [];
+    if (!Array.isArray(x.flags)) problems.push("The list of concerns is missing.");
+    flags.forEach(function (f, i) {
+      if (!f || typeof f.concern !== "string" || !f.concern.trim()) return problems.push("Concern " + (i + 1) + " is empty.");
+      if (!has(imaging, f.imaging_quote)) problems.push("Concern " + (i + 1) + " quotes the imaging report inexactly.");
+      if (!has(pathology, f.pathology_quote)) problems.push("Concern " + (i + 1) + " quotes the pathology report inexactly.");
+    });
+    if (x.match === "possible_mismatch" && !flags.length) problems.push("A possible mismatch needs at least one concern with quotes.");
+    if (typeof x.summary !== "string" || !x.summary.trim()) problems.push("The summary is missing.");
+    return problems;
+  }
+
   function checkRead(doc, r) {
     var problems = [];
-    if (!r) return ["Claude's answer could not be read."];
+    if (!r) return ["The report could not be read."];
+    (Array.isArray(r.unclear) ? r.unclear : []).forEach(function (p) { problems.push(p); });
     var q = r.quotes || {};
     Object.keys(q).forEach(function (k) {
       if (q[k] && doc.text.indexOf(q[k]) < 0) problems.push("The quote for " + k.replace("_", " ") + " is not in the report word for word.");
@@ -384,8 +554,8 @@ window.WorkspaceModules = (function () {
       return problems;
     }
     if (!normBirads(r.birads)) problems.push("No BI-RADS category in the impression.");
-    if (r.findings_match_impression === false) problems.push("The findings and the impression disagree" + (r.mismatch_quote ? ": \"" + r.mismatch_quote + "\"" : "") + ".");
-    return problems;
+    if (r.findings_match_impression === false) problems.push("The impression says negative, but the findings describe something" + (r.mismatch_quote ? ": \"" + r.mismatch_quote + "\"" : "") + ".");
+    return problems.filter(function (p, i) { return problems.indexOf(p) === i; });
   }
 
   function summarizeRead(doc, r) {
@@ -452,14 +622,15 @@ window.WorkspaceModules = (function () {
     A case is plain data (see newCase), so the workspace can save it between steps.
       hooks.log(event, c)               records what happened
       hooks.world(c, when, day, ctx)    lets the simulated world react (the workspace has no script)
-      hooks.check(doc, read)            returns problems with Claude's read (default: checkRead)
+      hooks.check(doc, read)            returns problems with the report's read (default: checkRead)
       hooks.side(c, side, read, doc, day)   a report gave another breast its own assessment: follow it on its own track
       hooks.openTracks(c)               the patient's other tracks that are still open
     A case follows one patient, or one breast of a patient when a report assesses each breast separately.
   */
   function newCase(patient) {
     return { patient: patient, started: false, closed: null, person: null, booked: null, step: null, openCat: null, openDate: null,
-      resolvedDay: null, neededPerson: false, used: {}, lastAgent: null, birads: null, bi3: null, side: null, sideSource: null, multi: false };
+      resolvedDay: null, neededPerson: false, used: {}, lastAgent: null, birads: null, bi3: null, side: null, sideSource: null, multi: false,
+      imagingDoc: null, pathDoc: null };
   }
 
   function createEngine(hooks) {
@@ -505,16 +676,16 @@ window.WorkspaceModules = (function () {
       });
     }
 
-    function openUrgentStep(c, day, kind, exam, docId) {
+    function openUrgentStep(c, day, kind, exam, docId, name) {
       var cfg = RULES[kind];
       c.step = {
-        kind: kind, name: cfg.step, due: addDays(exam, cfg.dueDays), personDay: dayOf(exam) + cfg.personIfNotBookedByDay,
+        kind: kind, name: name || cfg.step, due: addDays(exam, cfg.dueDays), personDay: dayOf(exam) + cfg.personIfNotBookedByDay,
         doc: docId, attempts: 0, replied: false, lastContact: null, noAnswerDay: day + RULES.urgent.noAnswerHandoffAfter,
         plan: RULES.urgent.attempts.map(function (a) { return { day: day + a.after, channel: a.channel, done: false }; }),
         overdueLogged: false
       };
       c.booked = null;
-      log(c, day, "agent", "pathway", "Pathway: " + cfg.step.toLowerCase() + ", due " + fmt(c.step.due) + ". Outreach starts now.", { short: "Due date set: " + fmtShort(c.step.due) });
+      log(c, day, "agent", "pathway", "Pathway: " + c.step.name.toLowerCase() + ", due " + fmt(c.step.due) + ". Outreach starts now.", { short: "Due date set: " + fmtShort(c.step.due) });
       // A report read after the hand-off day goes straight to a person instead of starting outreach.
       if (day >= c.step.personDay) handoff(c, day, "Nurse navigator", "This report is already beyond the unbooked handoff threshold (day " + cfg.personIfNotBookedByDay + " after the exam), so a person takes it now.", "Report came in late, sent to the navigator", "exception");
     }
@@ -535,11 +706,11 @@ window.WorkspaceModules = (function () {
       c.started = true;
       if (opts.split) {
         // Another case's report gave this breast its own assessment. The checks already ran on the whole report.
-        c.multi = true; c.sideSource = "assessment"; c.side = r.side;
+        c.multi = true; c.sideSource = "assessment"; c.side = r.side; c.imagingDoc = doc.id;
         log(c, day, "agent", "split", "Following the " + r.side + " breast on its own: " + summarizeRead(doc, r) + ".", { doc: doc.id, short: "Started a separate case for the " + r.side + " breast" });
       } else {
         log(c, day, "system", "doc", (opts.source ? opts.source + ". " : "") + doc.title + " arrived.", { doc: doc.id });
-        log(c, day, "agent", "read", "Claude read the " + doc.title.toLowerCase() + ": " + summarizeRead(doc, r) + ".", { doc: doc.id, short: "Read the " + doc.title.toLowerCase() });
+        log(c, day, "agent", "read", "The rules read the " + doc.title.toLowerCase() + ": " + summarizeRead(doc, r) + ".", { doc: doc.id, short: "Read the " + doc.title.toLowerCase() });
         var problems = check(doc, r);
         if (problems.length) {
           log(c, day, "agent", "check", "Check failed. " + problems.join(" "), { doc: doc.id, ok: false });
@@ -548,12 +719,13 @@ window.WorkspaceModules = (function () {
           handoff(c, day, "Radiologist", "The report is unclear, so the case stops here until a radiologist looks at it.", "Held for a radiologist: report unclear", "hold");
           return;
         }
-        log(c, day, "agent", "check", "Checks passed. Every quote matches the report word for word" + (doc.kind === "pathology" ? "." : ", and the findings fit the impression."), { doc: doc.id, ok: true });
+        log(c, day, "agent", "check", "Checks passed. " + (doc.kind === "pathology" ? "The diagnosis is one the rules know." : "One clear BI-RADS category, a valid exam date, and findings that fit the impression."), { doc: doc.id, ok: true });
         if (c.person && c.person.kind === "hold") {
           c.person = null;
           log(c, day, "agent", "note", "The radiologist's correction passed the checks. The agent picks the case back up.", { short: "Picked the case back up" });
         }
-        if (doc.kind === "pathology") return onPathology(c, doc, r, day);
+        if (doc.kind === "pathology") return onPathology(c, doc, r, day, opts.comparison);
+        c.imagingDoc = doc.id;
         // A report that gives each breast its own assessment: this case follows one breast, and each other breast gets a case of its own.
         var sides = perBreast(r);
         if (sides.length) {
@@ -614,14 +786,40 @@ window.WorkspaceModules = (function () {
       handoff(c, day, "Radiologist", "BI-RADS " + r.birads + " has no pathway in these rules.", "No pathway, sent to a person", "hold");
     }
 
-    function onPathology(c, doc, r, day) {
-      var res = r.pathology_result;
+    // Claude's side-by-side summary of the imaging and pathology reports, and any concerns it flags.
+    // A rule adds one concern of its own: BI-RADS 5 imaging with a benign result never matches.
+    function compare(c, doc, r, day, cmp) {
+      var concerns = [];
+      if (!cmp) log(c, day, "agent", "compare", "There is no imaging report on this case to compare the pathology with.", { doc: doc.id });
+      else if (cmp.error) log(c, day, "agent", "compare", "Claude's comparison of the two reports isn't available. " + cmp.error, { doc: doc.id });
+      else if (cmp.problems && cmp.problems.length) log(c, day, "agent", "compare", "Claude's comparison failed the quote check, so it isn't used. " + cmp.problems[0], { doc: doc.id, ok: false });
+      else {
+        var x = cmp.read;
+        log(c, day, "agent", "compare", "Claude compared the imaging and pathology reports. " + x.summary, { doc: doc.id, short: "Compared the imaging and pathology reports", comparison: x, match: x.match });
+        x.flags.forEach(function (f) {
+          concerns.push(f.concern);
+          log(c, day, "agent", "flag", "Possible mismatch: " + f.concern + " Imaging: \u201c" + f.imaging_quote + "\u201d Pathology: \u201c" + f.pathology_quote + "\u201d", { doc: doc.id, short: "Flagged a possible mismatch" });
+        });
+      }
+      if (r.pathology_result === "benign" && normBirads(c.birads) === "5") {
+        concerns.push("BI-RADS 5 imaging with a benign result never counts as a match.");
+        log(c, day, "agent", "flag", "Rule: BI-RADS 5 imaging with a benign result never counts as a match, so it goes back to the radiologist as a possible mismatch.", { doc: doc.id, short: "Flagged a possible mismatch", rule: true });
+      }
+      return concerns;
+    }
+
+    function onPathology(c, doc, r, day, cmp) {
+      var res = r.pathology_result, dx = r.diagnosis ? r.diagnosis.charAt(0).toLowerCase() + r.diagnosis.slice(1) : "no diagnosis given";
+      c.pathDoc = doc.id;
+      var concerns = compare(c, doc, r, day, cmp);
       if (res === "malignant") {
-        log(c, day, "agent", "pcp", "Note to the ordering PCP: pathology shows " + r.diagnosis + ". Breast surgery is taking over.", { short: "Told the ordering PCP" });
+        log(c, day, "agent", "pcp", "Note to the ordering PCP: pathology shows " + dx + ". Breast surgery is taking over.", { short: "Told the ordering PCP" });
         handoff(c, day, "Breast surgery team", "Cancer diagnosis: " + r.diagnosis + ". Her care moves to the surgery team.", "Pathology received, handed to breast surgery", "surgery");
         close(c, day, "Cancer diagnosed and handed to breast surgery. The agent's loop is done.", "Handed to breast surgery");
+      } else if (res === "benign" && concerns.length) {
+        handoff(c, day, "Radiologist", "Benign result: " + dx + ". It may not match the imaging. " + concerns[0] + " The radiologist decides whether it matches before the case closes.", "Possible mismatch sent to the radiologist", "concordance");
       } else if (res === "benign") {
-        handoff(c, day, "Radiologist", "Benign result (" + r.diagnosis + "). A person confirms it matches the imaging before the case closes.", "Benign result sent for a match check", "concordance");
+        handoff(c, day, "Radiologist", "Benign result: " + dx + ". A person confirms it matches the imaging before the case closes.", "Benign result sent for a match check", "concordance");
       } else {
         handoff(c, day, "Radiologist", "Pathology is " + res + ". A person decides the next step.", "Pathology needs a person", "hold");
       }
@@ -669,6 +867,12 @@ window.WorkspaceModules = (function () {
     // People in the loop. The simulation scripts them; in the workspace they are buttons.
     function personNote(c, day, who, note) { log(c, day, "person", "person", note, { who: who }); }
     function concordant(c, day) { c.person = null; close(c, day, "Benign and concordant. Back to annual screening.", "Resolved: benign and concordant"); }
+    // The radiologist found the benign result doesn't explain the imaging: the agent follows her to a repeat biopsy.
+    function discordant(c, day) {
+      c.person = null;
+      log(c, day, "agent", "pcp", "Note to the ordering PCP: the radiologist found that the benign biopsy result doesn't match the imaging and recommends a repeat biopsy. The agent is helping her schedule it.", { short: "Told the ordering PCP" });
+      openUrgentStep(c, day, "biopsy", dateOf(day), c.pathDoc, "Repeat biopsy");
+    }
     function resume(c, day) {
       c.person = null;
       if (c.step) { c.step.replied = true; c.step.lastContact = day; }
@@ -743,7 +947,7 @@ window.WorkspaceModules = (function () {
     }
 
     return { onDoc: onDoc, onReply: onReply, onBook: onBook, tick: tick, status: status, snapshot: snapshot,
-      personNote: personNote, concordant: concordant, resume: resume, closeByPerson: closeByPerson };
+      personNote: personNote, concordant: concordant, discordant: discordant, resume: resume, closeByPerson: closeByPerson };
   }
 
   /* ---------- the simulation ---------- */
@@ -751,8 +955,17 @@ window.WorkspaceModules = (function () {
     var docsById = {}, repliesById = {};
     input.documents.forEach(function (d) { docsById[d.id] = d; });
     input.replies.forEach(function (r) { repliesById[r.id] = r; });
-    var reads = input.reads;
+    var reads = input.reads, ruleReads = {};
     var events = [], agenda = {}, cases = {}, snapshots = [];
+    function readOf(doc) { return ruleReads[doc.id] || (ruleReads[doc.id] = readReport(doc.text)); }
+    // Claude's recorded comparison for this biopsy, checked against both reports. Only used for the pair it was made for.
+    function comparisonFor(c, doc) {
+      if (doc.kind !== "pathology") return null;
+      if (!c.imagingDoc) return null;
+      var saved = reads.comparisons && reads.comparisons[doc.id];
+      if (!saved || saved.imaging !== c.imagingDoc) return { error: "No recorded comparison for these two reports." };
+      return { read: saved.comparison, problems: checkComparison(saved.comparison, docsById[saved.imaging].text, doc.text) };
+    }
     // Each patient has one case, plus one more per breast when a report assesses each breast separately.
     var tracksOf = {}, trackByKey = {}, lastAgentOf = {};
     var RANK = { overdue: 0, person: 1, agent: 2, booked: 3, done: 4, waiting: 5 };
@@ -817,7 +1030,7 @@ window.WorkspaceModules = (function () {
     function onPerson(c, item, day) {
       var r = item.react;
       engine.personNote(c, day, r.person, r.note);
-      if (r.when === "concordance") { engine.concordant(c, day); return; }
+      if (r.when === "concordance") { if (r.decision === "discordant") engine.discordant(c, day); else engine.concordant(c, day); return; }
       if (r.doc) schedule(day, { type: "doc", patient: c.patient.id, doc: r.doc });
       if (r.book) engine.onBook(c, r.book, day, true);
     }
@@ -827,7 +1040,7 @@ window.WorkspaceModules = (function () {
       do {
         while (agenda[day] && agenda[day].length) {
           var it = agenda[day].shift(), c = (it.track && trackByKey[it.track]) || cases[it.patient];
-          if (it.type === "doc") engine.onDoc(c, docsById[it.doc], reads.documents[it.doc], day, { source: it.first ? c.patient.source : null });
+          if (it.type === "doc") { var d = docsById[it.doc]; engine.onDoc(c, d, readOf(d), day, { source: it.first ? c.patient.source : null, comparison: comparisonFor(c, d) }); }
           else if (it.type === "reply") engine.onReply(c, repliesById[it.reply], reads.replies[it.reply], day);
           else if (it.type === "book") engine.onBook(c, it.book, day, false);
           else if (it.type === "person") onPerson(c, it, day);
@@ -844,7 +1057,7 @@ window.WorkspaceModules = (function () {
   }
 
   var api = { RULES: RULES, EXCEPTIONS: EXCEPTIONS, TEMPLATES: TEMPLATES, simulate: simulate, createEngine: createEngine, newCase: newCase,
-    checkRead: checkRead, summarizeRead: summarizeRead, normBirads: normBirads, pathwayFor: pathwayFor, catOf: catOf,
+    readReport: readReport, checkComparison: checkComparison, checkRead: checkRead, summarizeRead: summarizeRead, normBirads: normBirads, pathwayFor: pathwayFor, catOf: catOf,
     followSide: followSide, perBreast: perBreast, sideRead: sideRead,
     addDays: addDays, addMonths: addMonths, dayOf: dayOf, dateOf: dateOf, fmt: fmt, fmtShort: fmtShort, weekday: weekday, message: message };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.BreastAgent = api;
@@ -869,6 +1082,9 @@ function validDate(value) {
 function checkReport(text, read, now) {
   const problems = [];
   if (!read || typeof read !== 'object' || Array.isArray(read)) return ['No usable structured report was returned.'];
+  // The rules say when a report doesn't fit them. Each reason sends the case to a radiologist.
+  if (Array.isArray(read.unclear)) for (const reason of read.unclear) problems.push(reason);
+  if (read.unclear && read.unclear.length) return [...new Set(problems)];
   if (!DOC_TYPES.includes(read.doc_type)) problems.push('Document type is missing or unsupported.');
   if (!validDate(read.exam_date)) problems.push('A valid exam or procedure date is required.');
   else if (read.exam_date > now) problems.push('The exam date is in the future and requires review.');
@@ -921,7 +1137,7 @@ function checkReport(text, read, now) {
       }
     }
   }
-  return problems;
+  return [...new Set(problems)];
 }
 
 // What the engine needs to know about a report.
@@ -1080,8 +1296,11 @@ function createLoop(store) {
       if (row && row.status === 'closed') return store.note(input.case_id, 'after_close', `This ${input.type} was read after the case closed, so the agent took no action.`, now);
       if (input.type === 'report') {
         let problems = [];
+        const cmp = result.comparison;
+        const comparison = !cmp ? null : cmp.error ? { error: cmp.error }
+          : { read: cmp.read, model: cmp.model, problems: A.checkComparison(cmp.read, cmp.imaging, input.text) };
         step(input.case_id, today, now, (engine, c, day) => {
-          engine.onDoc(c, P.docFor(input, result.read), result.read, day);
+          engine.onDoc(c, P.docFor(input, result.read), result.read, day, { comparison });
         }, { check: (doc, read) => (problems = P.checkReport(input.text, read, today)), resolution: 'A new report came in', model: result.model, mode: result.mode });
         store.inputProblems(input.id, problems);
       } else {
@@ -1119,11 +1338,16 @@ function createLoop(store) {
         if (review.kind !== 'concordance') throw httpError(409, 'Only a benign pathology result waits for a concordance check.');
         engine.personNote(c, day, who, text || 'The pathology matches the imaging.');
         engine.concordant(c, day);
+      } else if (action === 'discordant') {
+        if (review.kind !== 'concordance') throw httpError(409, 'Only a benign pathology result waits for a concordance check.');
+        engine.personNote(c, day, who, text || 'Not concordant. The result doesn’t explain the imaging finding. Recommend a repeat biopsy.');
+        engine.discordant(c, day);
       } else if (action === 'close') {
         if (!text) throw httpError(400, 'Add a short note saying why the case is closing.');
         engine.closeByPerson(c, day, who, text);
       } else throw httpError(400, 'Unknown action.');
-    }, { resolution: action === 'resume' ? 'Handed back to the agent' : action === 'concordant' ? 'Concordance confirmed' : 'Closed by a person' });
+    }, { resolution: action === 'resume' ? 'Handed back to the agent' : action === 'concordant' ? 'Concordance confirmed'
+      : action === 'discordant' ? 'Not a match: repeat biopsy' : 'Closed by a person' });
   }
 
   return { step, advanceAll, applyRead, book, act };
@@ -1135,7 +1359,7 @@ module.exports = { createLoop };
     "server/samples.js": function (module, exports, require, __dirname) {
 const A = require('../agent/agent.js');
 const documents = require('../data/documents.json');
-const reads = require('../reads/documents.json');
+const comparisons = require('../reads/comparisons.json');
 // Replies from the simulation, plus extra workspace samples that cover every reply rule.
 const replies = [...require('../data/replies.json'), ...require('../data/sample-replies.json')];
 const replyReads = { ...require('../reads/replies.json'), ...require('../reads/sample-replies.json') };
@@ -1145,20 +1369,21 @@ const patients = require('../data/patients.json');
 const STARTERS = [
   ['P2-screen', 'Diagnostic imaging'], ['P1-screen', 'Routine screening'], ['P7-dx', 'Biopsy pathway'], ['P9-screen', 'Conflicting findings'],
   ['P5-apr', 'Six-month follow-up'], ['P8-dx', 'BI-RADS 5 heads-up'], ['P7-path', 'Benign pathology review'], ['P8-path', 'Malignant pathology handoff'],
-  ['P10-dx', 'Both breasts: biopsy right, 6 months left']
+  ['P10-dx', 'Both breasts: biopsy right, 6 months left'], ['P11-dx', 'Spiculated mass, biopsy needed (BI-RADS 4C)']
 ];
 // Reports that continue a case: results, a corrected report, pathology.
 const NEXT = [
   ['P2-dx', 'Diagnostic result: benign (BI-RADS 2)'], ['P9-dx', 'Diagnostic result: negative (BI-RADS 1)'],
   ['P7-dx', 'Diagnostic result: suspicious, biopsy needed (BI-RADS 4B)'], ['P9-addendum', 'Radiologist addendum: corrected to BI-RADS 0'],
   ['P5-6mo', 'Six-month result: stable (BI-RADS 3)'], ['P7-path', 'Pathology: benign fibroadenoma'], ['P8-path', 'Pathology: invasive cancer'],
-  ['P10-path', 'Pathology: benign fibroadenoma, right breast']
+  ['P10-path', 'Pathology: benign fibroadenoma, right breast'], ['P11-path', 'Pathology: benign, but may not explain the mass'],
+  ['P11-path2', 'Repeat biopsy: invasive lobular carcinoma']
 ];
 const REPLIES = [
   ['P3-r1', 'Has no ride'], ['P2-r1', 'Says she booked'], ['P7-r1', 'Scared, asks for a call'], ['S-time', 'Wants another day'],
   ['S-question', 'Asks a medical question'], ['S-decline', 'Turns down the test'], ['S-wrong', 'Wrong number'],
   ['S-childcare', 'No one to watch her kids'], ['S-work', 'Can’t come because of work'], ['S-unclear', 'Just says “ok”'],
-  ['P3-r2', 'Ride works, booked'], ['P8-r1', 'Booked Monday morning']
+  ['P3-r2', 'Ride works, booked'], ['P8-r1', 'Booked Monday morning'], ['P11-r1', 'Was told it was benign, asks why again']
 ];
 
 const US = /\b(\d{2})\/(\d{2})\/(\d{4})\b/g;
@@ -1168,11 +1393,12 @@ const shift = (us, days) => toUs(A.addDays(toIso(us), days));
 const between = (from, to) => A.dayOf(to) - A.dayOf(from);
 const clean = text => String(text).replace(/\r\n?/g, '\n').trim();
 const doc = id => documents.find(d => d.id === id);
-const firstExamOf = patientId => reads[patients.find(p => p.id === patientId).first_doc].exam_date;
+const examOf = id => A.readReport(doc(id).text).exam_date;
+const firstExamOf = patientId => examOf(patients.find(p => p.id === patientId).first_doc);
 
 function examples(today) {
   return STARTERS.map(([id, label]) => {
-    const days = between(reads[id].exam_date, today);
+    const days = between(examOf(id), today);
     return { id, label, text: doc(id).text.replace(US, m => shift(m, days)) };
   });
 }
@@ -1182,7 +1408,7 @@ function examples(today) {
 function nextReports(today, anchors = {}) {
   return NEXT.map(([id, label]) => {
     const d = doc(id), pathology = d.kind === 'pathology';
-    const own = pathology ? reads[id].exam_date : d.date, target = pathology ? (anchors.biopsy || today) : today;
+    const own = pathology ? examOf(id) : d.date, target = pathology ? (anchors.biopsy || today) : today;
     const days = between(own, target), earlier = toUs(firstExamOf(d.patient));
     const text = d.text.replace(US, m => m === toUs(own) ? toUs(target) : m === earlier && anchors.firstExam ? toUs(anchors.firstExam) : shift(m, days));
     return { id, label, text };
@@ -1193,8 +1419,8 @@ function sampleReplies() {
   return REPLIES.map(([id, label]) => ({ id, label, text: replies.find(r => r.id === id).text }));
 }
 
-// Recorded mode: recognize a bundled report even after its dates moved, and move the dates in its recorded read the same way.
-function recordedRead(text) {
+// Recorded mode: recognize a bundled report even after its dates moved. Returns the sample and how its dates moved.
+function sampleOf(text) {
   const given = clean(text), shape = t => clean(t).replace(US, '<date>');
   const d = documents.find(item => shape(item.text) === shape(given));
   if (!d) return null;
@@ -1203,13 +1429,19 @@ function recordedRead(text) {
     if (map.has(from[i]) && map.get(from[i]) !== to[i]) return null;
     map.set(from[i], to[i]);
   }
-  const move = s => typeof s === 'string' ? s.replace(US, m => map.get(m) || m) : s;
-  const read = structuredClone(reads[d.id]);
-  if (read.exam_date) read.exam_date = toIso(move(toUs(read.exam_date)));
-  for (const key of Object.keys(read.quotes || {})) read.quotes[key] = move(read.quotes[key]);
-  for (const b of read.breasts || []) for (const key of Object.keys(b.quotes || {})) b.quotes[key] = move(b.quotes[key]);
-  read.mismatch_quote = move(read.mismatch_quote);
-  return read;
+  return { doc: d, map };
+}
+
+// Claude's recorded comparison, only for the pair it was made for: a sample pathology report and the imaging report before it.
+function recordedComparison(imagingText, pathologyText) {
+  const pathology = sampleOf(pathologyText), imaging = sampleOf(imagingText);
+  const saved = pathology && imaging && comparisons[pathology.doc.id];
+  if (!saved || saved.imaging !== imaging.doc.id) return null;
+  const map = new Map([...imaging.map, ...pathology.map]);
+  const move = value => typeof value === 'string' ? value.replace(US, m => map.get(m) || m)
+    : Array.isArray(value) ? value.map(move)
+    : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, move(v)])) : value;
+  return move(structuredClone(saved.comparison));
 }
 
 function recordedReply(text) {
@@ -1217,7 +1449,7 @@ function recordedReply(text) {
   return r ? structuredClone(replyReads[r.id]) : null;
 }
 
-module.exports = { examples, nextReports, sampleReplies, recordedRead, recordedReply };
+module.exports = { examples, nextReports, sampleReplies, recordedComparison, recordedReply };
 
     },
     "server/store.js": function (module, exports, require, __dirname) {
@@ -1232,7 +1464,7 @@ const VERSION = 2;
 const fingerprint = parts => createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 const json = value => value === null || value === undefined ? null : JSON.parse(value);
-const META = ['short', 'channel', 'template', 'labels', 'who', 'handoffKind', 'ok'];
+const META = ['short', 'channel', 'template', 'labels', 'who', 'handoffKind', 'ok', 'comparison', 'match', 'rule'];
 
 // A database from milestone 1 has a different shape. Keep it under a new name and start fresh.
 function setAsideOldDatabase(filename) {
@@ -1368,6 +1600,12 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
     setSetting(key, value) { db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, String(value)); },
     caseRow(id) { return db.prepare('SELECT * FROM cases WHERE id=?').get(id); },
     review(id) { return db.prepare('SELECT * FROM reviews WHERE id=?').get(id); },
+    // The latest imaging report on a case: what a pathology result is compared with.
+    imagingFor(caseId) {
+      const rows = db.prepare("SELECT text,read_json FROM inputs WHERE case_id=? AND type='report' AND status='read' ORDER BY created_at DESC,rowid DESC").all(caseId);
+      const row = rows.find(r => { const read = json(r.read_json); return read && read.doc_type && read.doc_type !== 'pathology'; });
+      return row ? row.text : null;
+    },
     list(today) {
       return db.prepare('SELECT id,patient,side,group_id,status,pathway,due,next_action,state_json,last_day,created_at,updated_at FROM cases ORDER BY created_at DESC,rowid DESC').all().map(row => {
         const c = json(row.state_json), day = today || (row.last_day !== null ? A.dateOf(row.last_day) : null), view = day ? agentView(c, day) : null;
@@ -1440,9 +1678,9 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
         if (!next) return null;
         db.prepare("UPDATE inputs SET status='reading',updated_at=? WHERE id=?").run(now, next.id);
         db.prepare("UPDATE cases SET status='reading',updated_at=? WHERE id=? AND state_json IS NULL").run(now, next.case_id);
-        const what = next.type === 'report' ? 'report' : 'reply';
-        event(next.case_id, 'system', 'reader_requested', mode === 'recorded' ? `Requested the matching recorded ${what} read. No model API call.`
-          : `Requested a live Claude structured read of the ${what}. Source text cannot select actions or tools.`, null, now);
+        event(next.case_id, 'system', 'reader_requested', next.type === 'report' ? 'Reading the report with the report rules. No model reads it.'
+          : mode === 'recorded' ? 'Requested the matching recorded reply read. No model API call.'
+          : 'Requested a live Claude structured read of the reply. Source text cannot select actions or tools.', null, now);
         return { ...next, status: 'reading' };
       });
     },
@@ -1450,8 +1688,11 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
       const row = db.prepare('SELECT case_id,type FROM inputs WHERE id=?').get(inputId);
       db.prepare("UPDATE inputs SET status='read',read_json=?,model=?,reader_mode=?,problems_json='[]',updated_at=? WHERE id=?")
         .run(result.read ? JSON.stringify(result.read) : null, result.model || null, result.mode || null, now, inputId);
-      event(row.case_id, 'system', 'read_completed', result.mode === 'recorded' ? `Used the recorded ${row.type} read; no model API call.`
-        : result.read && result.model ? `Live read returned by ${result.model}.` : 'No usable structured read was returned.', null, now);
+      const cmp = result.comparison;
+      event(row.case_id, 'system', 'read_completed', (result.mode === 'rules' ? 'The report rules read it.'
+        : result.mode === 'recorded' ? `Used the recorded ${row.type} read; no model API call.`
+        : result.read && result.model ? `Live read returned by ${result.model}.` : 'No usable structured read was returned.')
+        + (cmp && cmp.read ? (cmp.mode === 'recorded' ? ' Used Claude’s recorded comparison with the imaging report; no model API call.' : ` Claude (${cmp.model}) compared it with the imaging report.`) : ''), null, now);
     },
     inputProblems(inputId, problems) { db.prepare('UPDATE inputs SET problems_json=? WHERE id=?').run(JSON.stringify(problems), inputId); },
     note(caseId, kind, detail, now) { event(caseId, 'system', kind, detail, null, now); },
@@ -1537,39 +1778,39 @@ module.exports = { openStore, httpError };
     "server/reader.js": function (module, exports, require, __dirname) {
 const fs = require('node:fs');
 const path = require('node:path');
-const { recordedRead, recordedReply } = require('./samples.js');
+const A = require('../agent/agent.js');
+const { recordedComparison, recordedReply } = require('./samples.js');
 
-const documentPrompt = fs.readFileSync(path.join(__dirname, '../prompts/read_document.txt'), 'utf8');
+/*
+  Reports are read by rules (agent/agent.js, readReport), the same way in every mode, with no model.
+  Claude does the two jobs that need judgment: reading her replies, and comparing a pathology report
+  with the imaging report that led to the biopsy. Code checks every quote it returns.
+*/
+const comparePrompt = fs.readFileSync(path.join(__dirname, '../prompts/compare_reports.txt'), 'utf8');
 const replyPrompt = fs.readFileSync(path.join(__dirname, '../prompts/read_reply.txt'), 'utf8');
 const nullableString = { type: ['string', 'null'] };
-const documentSchema = {
+const comparisonSchema = {
   type: 'object', additionalProperties: false,
   properties: {
-    doc_type: { type: 'string', enum: ['screening', 'diagnostic', 'ultrasound', 'addendum', 'pathology'] },
-    exam_date: nullableString,
-    side: { type: ['string', 'null'], enum: ['left', 'right', 'both', null] },
-    birads: nullableString, next_step: nullableString,
-    findings_match_impression: { type: ['boolean', 'null'] },
-    mismatch_quote: nullableString, pathology_result: nullableString, diagnosis: nullableString,
-    breasts: {
-      type: 'array',
-      items: {
-        type: 'object', additionalProperties: false,
-        properties: {
-          side: { type: 'string', enum: ['left', 'right'] }, birads: { type: 'string' }, next_step: nullableString,
-          quotes: { type: 'object', additionalProperties: false, properties: { birads: { type: 'string' }, next_step: nullableString }, required: ['birads', 'next_step'] }
-        },
-        required: ['side', 'birads', 'next_step', 'quotes']
-      }
-    },
-    quotes: {
+    imaging: {
       type: 'object', additionalProperties: false,
-      properties: { exam_date: nullableString, birads: nullableString, next_step: nullableString, pathology_result: nullableString },
-      required: ['exam_date', 'birads', 'next_step', 'pathology_result']
-    }
+      properties: {
+        side: { type: ['string', 'null'], enum: ['left', 'right', null] }, size: nullableString, margins: nullableString, birads: nullableString,
+        quotes: { type: 'object', additionalProperties: false, properties: { size: nullableString, margins: nullableString, birads: nullableString }, required: ['size', 'margins', 'birads'] }
+      },
+      required: ['side', 'size', 'margins', 'birads', 'quotes']
+    },
+    pathology: { type: 'object', additionalProperties: false, properties: { diagnosis: { type: 'string' }, quote: { type: 'string' } }, required: ['diagnosis', 'quote'] },
+    match: { type: 'string', enum: ['concordant', 'possible_mismatch', 'unclear'] },
+    flags: {
+      type: 'array',
+      items: { type: 'object', additionalProperties: false, properties: { concern: { type: 'string' }, imaging_quote: { type: 'string' }, pathology_quote: { type: 'string' } }, required: ['concern', 'imaging_quote', 'pathology_quote'] }
+    },
+    summary: { type: 'string' }
   },
-  required: ['doc_type', 'exam_date', 'side', 'birads', 'next_step', 'findings_match_impression', 'mismatch_quote', 'pathology_result', 'diagnosis', 'breasts', 'quotes']
+  required: ['imaging', 'pathology', 'match', 'flags', 'summary']
 };
+const pairText = (imaging, pathology) => `IMAGING REPORT:\n${imaging}\n\nPATHOLOGY REPORT:\n${pathology}`;
 const REPLY_LABELS = ['booked', 'wants_new_time', 'transport_barrier', 'other_barrier', 'scared_or_worried', 'medical_question', 'declines_care', 'wrong_number', 'other'];
 const replySchema = {
   type: 'object', additionalProperties: false,
@@ -1581,8 +1822,8 @@ const replySchema = {
   required: ['labels', 'quote', 'summary']
 };
 const KINDS = {
-  report: { prompt: documentPrompt, schema: documentSchema, tool: 'record_report', intro: 'Read this synthetic report:\n\n', what: 'report', recorded: recordedRead,
-    toolHelp: 'Return the extracted report facts and verbatim evidence for code validation. This tool does not send messages or decide a pathway.' },
+  compare: { prompt: comparePrompt, schema: comparisonSchema, tool: 'record_comparison', intro: 'Compare these two synthetic reports:\n\n', what: 'pair of reports',
+    toolHelp: 'Return the side-by-side summary, whether the result may not match, and each concern with verbatim quotes for code validation. This tool does not decide or message anyone.' },
   reply: { prompt: replyPrompt, schema: replySchema, tool: 'record_reply', intro: 'Read this synthetic patient reply:\n\n', what: 'reply', recorded: recordedReply,
     toolHelp: 'Return the reply labels, a verbatim quote and a short summary for code validation. This tool does not answer the patient or decide what happens next.' }
 };
@@ -1623,9 +1864,28 @@ function claudeCodeReader({ env, spawnImpl }) {
     child.stdin.on('error', () => {});
     child.stdin.end(k.intro + text);
   });
-  return {
+  return withRules({
     status() { return { mode: 'claude-code', configured: true, model: env.ANTHROPIC_MODEL || 'Your Claude Code sign-in' }; },
-    read: read('report'), readReply: read('reply')
+    compare: read('compare'), readReply: read('reply')
+  });
+}
+
+// Every mode reads reports the same way: by rule. When the report is pathology and the case has an imaging
+// report, Claude compares the two. A comparison that can't be made never blocks the case: a person reviews it.
+function withRules(reader) {
+  return {
+    status: reader.status, readReply: reader.readReply,
+    async read(text, context = {}) {
+      const read = A.readReport(text);
+      let comparison = null;
+      if (read.doc_type === 'pathology' && context.imaging) {
+        try {
+          const result = await reader.compare(pairText(context.imaging, text), { imaging: context.imaging, pathology: text });
+          comparison = { read: result.read, model: result.model, mode: result.mode, imaging: context.imaging };
+        } catch (e) { comparison = { error: e instanceof ReaderError ? e.message : 'The comparison could not be made.' }; }
+      }
+      return { read, mode: 'rules', model: 'Report rules · no model', comparison };
+    }
   };
 }
 
@@ -1634,17 +1894,19 @@ function createReader({ env = process.env, fetchImpl = fetch, spawnImpl = null }
   if (!['live', 'recorded', 'claude-code'].includes(mode)) throw new Error('READER_MODE must be recorded, live or claude-code.');
   if (mode === 'claude-code') return claudeCodeReader({ env, spawnImpl });
   if (mode === 'recorded') {
-    const recorded = kind => async text => {
-      const read = KINDS[kind].recorded(text);
-      if (!read) throw new ReaderError('unsupported_sample', kind === 'report'
-        ? 'Recorded mode recognizes only the bundled synthetic reports (with updated dates). Select a sample, or enable live mode later for a new report.'
-        : 'Recorded mode recognizes only the bundled sample replies. Pick one from the list, or enable live mode later to read any reply.');
-      return { read, mode: 'recorded', model: 'Recorded sample · no API call', usage: null };
-    };
-    return {
+    return withRules({
       status() { return { mode: 'recorded', configured: true, model: 'Recorded sample reads · no API call' }; },
-      read: recorded('report'), readReply: recorded('reply')
-    };
+      async compare(text, pair) {
+        const read = recordedComparison(pair.imaging, pair.pathology);
+        if (!read) throw new ReaderError('unsupported_sample', 'Recorded mode has Claude’s comparison only for the sample pairs (a sample imaging report and the pathology that follows it). Live mode compares any two reports.');
+        return { read, mode: 'recorded', model: 'Recorded sample · no API call', usage: null };
+      },
+      async readReply(text) {
+        const read = recordedReply(text);
+        if (!read) throw new ReaderError('unsupported_sample', 'Recorded mode recognizes only the bundled sample replies. Pick one from the list, or enable live mode later to read any reply.');
+        return { read, mode: 'recorded', model: 'Recorded sample · no API call', usage: null };
+      }
+    });
   }
   let discoveredModel;
   const configured = () => Boolean(env.ANTHROPIC_API_KEY?.trim());
@@ -1691,10 +1953,10 @@ function createReader({ env = process.env, fetchImpl = fetch, spawnImpl = null }
     if (!tool || response.stop_reason === 'max_tokens') throw new ReaderError('invalid_output', `Claude did not return a complete structured ${k.what}. A person must review this case.`);
     return { read: tool.input, mode: 'live', model: response.model || model, usage: response.usage || null };
   };
-  return {
+  return withRules({
     status() { return { mode: 'live', configured: configured(), model: env.ANTHROPIC_MODEL || discoveredModel || 'Discover an available Sonnet model on first read' }; },
-    read: live('report'), readReply: live('reply')
-  };
+    compare: live('compare'), readReply: live('reply')
+  });
 }
 
 module.exports = { createReader, ReaderError, REPLY_LABELS };
@@ -1735,7 +1997,7 @@ function createApi({ store, reader, clock = () => new Date().toISOString(), time
       if (!job) return;
       let result;
       try {
-        result = job.type === 'report' ? await reader.read(job.text) : await reader.readReply(job.text);
+        result = job.type === 'report' ? await reader.read(job.text, { imaging: store.imagingFor(job.case_id) }) : await reader.readReply(job.text);
       } catch (e) {
         const at = nowIso();
         if (e.code === 'invalid_output') return loop.applyRead(job, { read: null, mode: reader.status().mode }, todayOf(at), at);
@@ -1848,22 +2110,22 @@ module.exports = { createApi };
 
     },
     "data/documents.json": function (module, exports, require, __dirname) {
-module.exports = [{"id":"P1-screen","patient":"P1","kind":"imaging","title":"Screening mammogram","date":"2026-09-02","text":"EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/02/2026\nHISTORY: 52-year-old woman, annual screening. No breast complaints.\nCOMPARISON: 08/27/2025, 08/22/2024.\nBREAST DENSITY: Scattered areas of fibroglandular density.\nFINDINGS: No suspicious mass, calcifications or architectural distortion in either breast. No change from prior studies.\nIMPRESSION: Negative. BI-RADS 1: Negative.\nRECOMMENDATION: Routine screening mammogram in 1 year."},{"id":"P2-screen","patient":"P2","kind":"imaging","title":"Screening mammogram","date":"2026-09-01","text":"EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/01/2026\nHISTORY: 47-year-old woman, annual screening.\nCOMPARISON: 08/19/2025.\nBREAST DENSITY: Heterogeneously dense, which may obscure small masses.\nFINDINGS: In the right breast, upper outer quadrant, posterior depth, there is a focal asymmetry seen on the CC view only. No suspicious calcifications. The left breast is unremarkable.\nIMPRESSION: Right breast focal asymmetry. BI-RADS 0: Incomplete. Need additional imaging evaluation.\nRECOMMENDATION: Diagnostic mammogram of the right breast with spot compression views, and ultrasound if needed."},{"id":"P2-dx","patient":"P2","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-09-10","text":"EXAM: Diagnostic mammogram, right breast, with spot compression views. Targeted right breast ultrasound.\nDATE: 09/10/2026\nINDICATION: Recall from screening 09/01/2026 for a right breast focal asymmetry.\nFINDINGS: Spot compression views show the asymmetry corresponds to an 8 mm circumscribed oval mass with a fatty hilum. Targeted ultrasound confirms an intramammary lymph node with normal cortical thickness.\nIMPRESSION: Benign intramammary lymph node, right breast. BI-RADS 2: Benign.\nRECOMMENDATION: Return to annual screening."},{"id":"P3-screen","patient":"P3","kind":"imaging","title":"Screening mammogram","date":"2026-09-03","text":"EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/03/2026\nHISTORY: 61-year-old woman, screening. Last mammogram 2023.\nCOMPARISON: 06/14/2023.\nBREAST DENSITY: Scattered areas of fibroglandular density.\nFINDINGS: In the left breast at 3 o'clock, middle depth, there is a new 1.4 cm circumscribed oval mass. No associated calcifications. The right breast is unremarkable.\nIMPRESSION: New left breast mass. BI-RADS 0: Incomplete. Need additional imaging evaluation.\nRECOMMENDATION: Diagnostic mammogram and targeted ultrasound of the left breast."},{"id":"P3-dx","patient":"P3","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-09-08","text":"EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound.\nDATE: 09/08/2026\nINDICATION: Recall from screening 09/03/2026 for a left breast mass.\nFINDINGS: The left breast mass at 3 o'clock persists on additional views. Targeted ultrasound shows a 1.4 cm anechoic, circumscribed mass with posterior acoustic enhancement, consistent with a simple cyst.\nIMPRESSION: Simple cyst, left breast. BI-RADS 2: Benign.\nRECOMMENDATION: Return to annual screening."},{"id":"P4-screen","patient":"P4","kind":"imaging","title":"Screening mammogram","date":"2026-09-14","text":"EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/14/2026\nHISTORY: 55-year-old woman, annual screening.\nCOMPARISON: 09/03/2025.\nBREAST DENSITY: Scattered areas of fibroglandular density.\nFINDINGS: In the right breast, upper inner quadrant, there is a new 6 mm group of amorphous calcifications. The left breast is unremarkable.\nIMPRESSION: New right breast calcifications. BI-RADS 0: Incomplete. Need additional imaging evaluation.\nRECOMMENDATION: Diagnostic mammogram of the right breast with magnification views."},{"id":"P4-dx","patient":"P4","kind":"imaging","title":"Diagnostic mammogram","date":"2026-09-25","text":"EXAM: Diagnostic mammogram, right breast, with magnification views.\nDATE: 09/25/2026\nINDICATION: Recall from screening 09/14/2026 for right breast calcifications.\nFINDINGS: Magnification views show the calcifications are round and smudgy on the CC view and layer into crescent shapes on the true lateral view, consistent with milk of calcium in benign microcysts.\nIMPRESSION: Benign calcifications, right breast. BI-RADS 2: Benign.\nRECOMMENDATION: Return to annual screening."},{"id":"P5-apr","patient":"P5","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-04-08","text":"EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound.\nDATE: 04/08/2026\nINDICATION: Recall from screening 03/30/2026 for a left breast mass.\nFINDINGS: At 10 o'clock, 4 cm from the nipple, there is a 9 mm oval, circumscribed, hypoechoic mass oriented parallel to the skin, without posterior features. No prior study shows this area.\nIMPRESSION: Probably benign left breast mass, likely a fibroadenoma. BI-RADS 3: Probably benign.\nRECOMMENDATION: Short-interval follow-up diagnostic mammogram and ultrasound of the left breast in 6 months."},{"id":"P5-6mo","patient":"P5","kind":"imaging","title":"6-month follow-up mammogram and ultrasound","date":"2026-10-08","text":"EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound. 6-month follow-up.\nDATE: 10/08/2026\nCOMPARISON: 04/08/2026.\nFINDINGS: The 9 mm oval circumscribed mass at 10 o'clock is unchanged in size and appearance.\nIMPRESSION: Stable probably benign left breast mass. BI-RADS 3: Probably benign.\nRECOMMENDATION: Continued follow-up with diagnostic mammogram and ultrasound of the left breast in 6 months."},{"id":"P6-apr","patient":"P6","kind":"imaging","title":"Diagnostic ultrasound","date":"2026-04-15","text":"EXAM: Targeted right breast ultrasound.\nDATE: 04/15/2026\nINDICATION: Recall from screening 04/06/2026 for a right breast mass.\nFINDINGS: At 7 o'clock, 3 cm from the nipple, there is a 7 mm oval, circumscribed, hypoechoic mass oriented parallel to the skin.\nIMPRESSION: Probably benign right breast mass. BI-RADS 3: Probably benign.\nRECOMMENDATION: Follow-up right breast ultrasound in 6 months."},{"id":"P7-dx","patient":"P7","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-09-14","text":"EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound.\nDATE: 09/14/2026\nINDICATION: 44-year-old woman with a new lump in the left breast, found by the patient.\nFINDINGS: At the site of the lump, left breast 1 o'clock, 5 cm from the nipple, there is a 1.6 cm oval hypoechoic mass with partly indistinct margins and internal vascularity.\nIMPRESSION: Suspicious left breast mass. BI-RADS 4B: Moderate suspicion for malignancy.\nRECOMMENDATION: Ultrasound-guided core needle biopsy of the left breast mass. The recommendation was discussed with the patient."},{"id":"P7-path","patient":"P7","kind":"pathology","title":"Pathology report","date":"2026-09-24","text":"SURGICAL PATHOLOGY REPORT\nSPECIMEN: Left breast, 1 o'clock, ultrasound-guided core needle biopsy\nPROCEDURE DATE: 09/21/2026\nDIAGNOSIS: Fibroadenoma. Negative for atypia and malignancy.\nCOMMENT: Findings discussed with the breast imaging team for radiology-pathology correlation."},{"id":"P8-dx","patient":"P8","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-09-16","text":"EXAM: Diagnostic mammogram, right breast. Targeted right breast ultrasound.\nDATE: 09/16/2026\nINDICATION: 67-year-old woman with a new lump in the right breast, found by the patient.\nFINDINGS: In the right breast at 10 o'clock, 6 cm from the nipple, there is a 2.1 cm irregular mass with spiculated margins and associated fine pleomorphic calcifications. Ultrasound shows a corresponding irregular, non-parallel hypoechoic mass with angular margins. No suspicious right axillary lymph nodes.\nIMPRESSION: Highly suspicious right breast mass. BI-RADS 5: Highly suggestive of malignancy.\nRECOMMENDATION: Ultrasound-guided core needle biopsy of the right breast mass. The findings were discussed with the patient."},{"id":"P8-path","patient":"P8","kind":"pathology","title":"Pathology report","date":"2026-09-24","text":"SURGICAL PATHOLOGY REPORT\nSPECIMEN: Right breast, 10 o'clock, ultrasound-guided core needle biopsy\nPROCEDURE DATE: 09/21/2026\nDIAGNOSIS: Invasive ductal carcinoma, Nottingham grade 2.\nBIOMARKERS: Estrogen receptor positive. Progesterone receptor positive. HER2 negative."},{"id":"P9-screen","patient":"P9","kind":"imaging","title":"Screening mammogram","date":"2026-09-22","text":"EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/22/2026\nHISTORY: 63-year-old woman, annual screening.\nCOMPARISON: 09/15/2025.\nBREAST DENSITY: Heterogeneously dense, which may obscure small masses.\nFINDINGS: In the left breast at 2 o'clock, middle depth, there is a possible new 1.1 cm irregular mass with indistinct margins, seen on the CC view only. The right breast is unremarkable.\nIMPRESSION: Negative. BI-RADS 1: Negative.\nRECOMMENDATION: Routine screening mammogram in 1 year."},{"id":"P9-addendum","patient":"P9","kind":"addendum","title":"Report addendum","date":"2026-09-23","text":"ADDENDUM to the screening mammogram of 09/22/2026\nDATE OF ADDENDUM: 09/23/2026\nThe original impression was entered in error. The possible new 1.1 cm irregular mass in the left breast at 2 o'clock needs further evaluation.\nCORRECTED IMPRESSION: BI-RADS 0: Incomplete. Need additional imaging evaluation.\nRECOMMENDATION: Diagnostic mammogram and targeted ultrasound of the left breast."},{"id":"P9-dx","patient":"P9","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-09-29","text":"EXAM: Diagnostic mammogram, left breast, with spot compression views. Targeted left breast ultrasound.\nDATE: 09/29/2026\nINDICATION: Recall from screening 09/22/2026 for a possible left breast mass.\nFINDINGS: Spot compression views of the left breast at 2 o'clock show the finding disperses, consistent with overlapping fibroglandular tissue. Targeted ultrasound at 2 o'clock shows normal fibroglandular tissue without a mass.\nIMPRESSION: No mammographic or sonographic abnormality. BI-RADS 1: Negative.\nRECOMMENDATION: Return to annual screening."},{"id":"P10-dx","patient":"P10","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-09-08","text":"EXAM: Bilateral diagnostic mammogram. Bilateral targeted breast ultrasound.\nDATE: 09/08/2026\nINDICATION: 68-year-old woman recalled from screening on 09/01/2026 for findings in both breasts.\nCOMPARISON: 08/28/2025.\nFINDINGS: Right breast: at 10 o'clock, 4 cm from the nipple, there is a 1.2 cm oval hypoechoic mass with indistinct margins, new since the prior exam. Left breast: at 2 o'clock, 3 cm from the nipple, there is a 6 mm oval circumscribed hypoechoic mass parallel to the skin, without suspicious features.\nIMPRESSION:\n1. Right breast mass at 10 o'clock. BI-RADS 4A: Low suspicion for malignancy.\n2. Left breast mass at 2 o'clock, probably benign. BI-RADS 3: Probably benign.\nOVERALL ASSESSMENT: BI-RADS 4A.\nRECOMMENDATION: Ultrasound-guided core needle biopsy of the right breast mass. Follow-up ultrasound of the left breast in 6 months."},{"id":"P10-path","patient":"P10","kind":"pathology","title":"Pathology report","date":"2026-09-18","text":"SURGICAL PATHOLOGY REPORT\nSPECIMEN: Right breast, 10 o'clock, ultrasound-guided core needle biopsy\nPROCEDURE DATE: 09/15/2026\nDIAGNOSIS: Fibroadenoma. Negative for atypia and malignancy.\nCOMMENT: Findings discussed with the breast imaging team for radiology-pathology correlation."}];
+module.exports = [{"id":"P1-screen","patient":"P1","kind":"imaging","title":"Screening mammogram","date":"2026-09-02","text":"EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/02/2026\nHISTORY: 52-year-old woman, annual screening. No breast complaints.\nCOMPARISON: 08/27/2025, 08/22/2024.\nBREAST DENSITY: Scattered areas of fibroglandular density.\nFINDINGS: No suspicious mass, calcifications or architectural distortion in either breast. No change from prior studies.\nIMPRESSION: Negative. BI-RADS 1: Negative.\nRECOMMENDATION: Routine screening mammogram in 1 year."},{"id":"P2-screen","patient":"P2","kind":"imaging","title":"Screening mammogram","date":"2026-09-01","text":"EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/01/2026\nHISTORY: 47-year-old woman, annual screening.\nCOMPARISON: 08/19/2025.\nBREAST DENSITY: Heterogeneously dense, which may obscure small masses.\nFINDINGS: In the right breast, upper outer quadrant, posterior depth, there is a focal asymmetry seen on the CC view only. No suspicious calcifications. The left breast is unremarkable.\nIMPRESSION: Right breast focal asymmetry. BI-RADS 0: Incomplete. Need additional imaging evaluation.\nRECOMMENDATION: Diagnostic mammogram of the right breast with spot compression views, and ultrasound if needed."},{"id":"P2-dx","patient":"P2","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-09-10","text":"EXAM: Diagnostic mammogram, right breast, with spot compression views. Targeted right breast ultrasound.\nDATE: 09/10/2026\nINDICATION: Recall from screening 09/01/2026 for a right breast focal asymmetry.\nFINDINGS: Spot compression views show the asymmetry corresponds to an 8 mm circumscribed oval mass with a fatty hilum. Targeted ultrasound confirms an intramammary lymph node with normal cortical thickness.\nIMPRESSION: Benign intramammary lymph node, right breast. BI-RADS 2: Benign.\nRECOMMENDATION: Return to annual screening."},{"id":"P3-screen","patient":"P3","kind":"imaging","title":"Screening mammogram","date":"2026-09-03","text":"EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/03/2026\nHISTORY: 61-year-old woman, screening. Last mammogram 2023.\nCOMPARISON: 06/14/2023.\nBREAST DENSITY: Scattered areas of fibroglandular density.\nFINDINGS: In the left breast at 3 o'clock, middle depth, there is a new 1.4 cm circumscribed oval mass. No associated calcifications. The right breast is unremarkable.\nIMPRESSION: New left breast mass. BI-RADS 0: Incomplete. Need additional imaging evaluation.\nRECOMMENDATION: Diagnostic mammogram and targeted ultrasound of the left breast."},{"id":"P3-dx","patient":"P3","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-09-08","text":"EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound.\nDATE: 09/08/2026\nINDICATION: Recall from screening 09/03/2026 for a left breast mass.\nFINDINGS: The left breast mass at 3 o'clock persists on additional views. Targeted ultrasound shows a 1.4 cm anechoic, circumscribed mass with posterior acoustic enhancement, consistent with a simple cyst.\nIMPRESSION: Simple cyst, left breast. BI-RADS 2: Benign.\nRECOMMENDATION: Return to annual screening."},{"id":"P4-screen","patient":"P4","kind":"imaging","title":"Screening mammogram","date":"2026-09-14","text":"EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/14/2026\nHISTORY: 55-year-old woman, annual screening.\nCOMPARISON: 09/03/2025.\nBREAST DENSITY: Scattered areas of fibroglandular density.\nFINDINGS: In the right breast, upper inner quadrant, there is a new 6 mm group of amorphous calcifications. The left breast is unremarkable.\nIMPRESSION: New right breast calcifications. BI-RADS 0: Incomplete. Need additional imaging evaluation.\nRECOMMENDATION: Diagnostic mammogram of the right breast with magnification views."},{"id":"P4-dx","patient":"P4","kind":"imaging","title":"Diagnostic mammogram","date":"2026-09-25","text":"EXAM: Diagnostic mammogram, right breast, with magnification views.\nDATE: 09/25/2026\nINDICATION: Recall from screening 09/14/2026 for right breast calcifications.\nFINDINGS: Magnification views show the calcifications are round and smudgy on the CC view and layer into crescent shapes on the true lateral view, consistent with milk of calcium in benign microcysts.\nIMPRESSION: Benign calcifications, right breast. BI-RADS 2: Benign.\nRECOMMENDATION: Return to annual screening."},{"id":"P5-apr","patient":"P5","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-04-08","text":"EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound.\nDATE: 04/08/2026\nINDICATION: Recall from screening 03/30/2026 for a left breast mass.\nFINDINGS: At 10 o'clock, 4 cm from the nipple, there is a 9 mm oval, circumscribed, hypoechoic mass oriented parallel to the skin, without posterior features. No prior study shows this area.\nIMPRESSION: Probably benign left breast mass, likely a fibroadenoma. BI-RADS 3: Probably benign.\nRECOMMENDATION: Short-interval follow-up diagnostic mammogram and ultrasound of the left breast in 6 months."},{"id":"P5-6mo","patient":"P5","kind":"imaging","title":"6-month follow-up mammogram and ultrasound","date":"2026-10-08","text":"EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound. 6-month follow-up.\nDATE: 10/08/2026\nCOMPARISON: 04/08/2026.\nFINDINGS: The 9 mm oval circumscribed mass at 10 o'clock is unchanged in size and appearance.\nIMPRESSION: Stable probably benign left breast mass. BI-RADS 3: Probably benign.\nRECOMMENDATION: Continued follow-up with diagnostic mammogram and ultrasound of the left breast in 6 months."},{"id":"P6-apr","patient":"P6","kind":"imaging","title":"Diagnostic ultrasound","date":"2026-04-15","text":"EXAM: Targeted right breast ultrasound.\nDATE: 04/15/2026\nINDICATION: Recall from screening 04/06/2026 for a right breast mass.\nFINDINGS: At 7 o'clock, 3 cm from the nipple, there is a 7 mm oval, circumscribed, hypoechoic mass oriented parallel to the skin.\nIMPRESSION: Probably benign right breast mass. BI-RADS 3: Probably benign.\nRECOMMENDATION: Follow-up right breast ultrasound in 6 months."},{"id":"P7-dx","patient":"P7","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-09-14","text":"EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound.\nDATE: 09/14/2026\nINDICATION: 44-year-old woman with a new lump in the left breast, found by the patient.\nFINDINGS: At the site of the lump, left breast 1 o'clock, 5 cm from the nipple, there is a 1.6 cm oval hypoechoic mass with partly indistinct margins and internal vascularity.\nIMPRESSION: Suspicious left breast mass. BI-RADS 4B: Moderate suspicion for malignancy.\nRECOMMENDATION: Ultrasound-guided core needle biopsy of the left breast mass. The recommendation was discussed with the patient."},{"id":"P7-path","patient":"P7","kind":"pathology","title":"Pathology report","date":"2026-09-24","imaging":"P7-dx","text":"SURGICAL PATHOLOGY REPORT\nSPECIMEN: Left breast, 1 o'clock, ultrasound-guided core needle biopsy\nPROCEDURE DATE: 09/21/2026\nDIAGNOSIS: Fibroadenoma. Negative for atypia and malignancy.\nCOMMENT: Findings discussed with the breast imaging team for radiology-pathology correlation."},{"id":"P8-dx","patient":"P8","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-09-16","text":"EXAM: Diagnostic mammogram, right breast. Targeted right breast ultrasound.\nDATE: 09/16/2026\nINDICATION: 67-year-old woman with a new lump in the right breast, found by the patient.\nFINDINGS: In the right breast at 10 o'clock, 6 cm from the nipple, there is a 2.1 cm irregular mass with spiculated margins and associated fine pleomorphic calcifications. Ultrasound shows a corresponding irregular, non-parallel hypoechoic mass with angular margins. No suspicious right axillary lymph nodes.\nIMPRESSION: Highly suspicious right breast mass. BI-RADS 5: Highly suggestive of malignancy.\nRECOMMENDATION: Ultrasound-guided core needle biopsy of the right breast mass. The findings were discussed with the patient."},{"id":"P8-path","patient":"P8","kind":"pathology","title":"Pathology report","date":"2026-09-24","imaging":"P8-dx","text":"SURGICAL PATHOLOGY REPORT\nSPECIMEN: Right breast, 10 o'clock, ultrasound-guided core needle biopsy\nPROCEDURE DATE: 09/21/2026\nDIAGNOSIS: Invasive ductal carcinoma, Nottingham grade 2.\nBIOMARKERS: Estrogen receptor positive. Progesterone receptor positive. HER2 negative."},{"id":"P9-screen","patient":"P9","kind":"imaging","title":"Screening mammogram","date":"2026-09-22","text":"EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/22/2026\nHISTORY: 63-year-old woman, annual screening.\nCOMPARISON: 09/15/2025.\nBREAST DENSITY: Heterogeneously dense, which may obscure small masses.\nFINDINGS: In the left breast at 2 o'clock, middle depth, there is a possible new 1.1 cm irregular mass with indistinct margins, seen on the CC view only. The right breast is unremarkable.\nIMPRESSION: Negative. BI-RADS 1: Negative.\nRECOMMENDATION: Routine screening mammogram in 1 year."},{"id":"P9-addendum","patient":"P9","kind":"addendum","title":"Report addendum","date":"2026-09-23","text":"ADDENDUM to the screening mammogram of 09/22/2026\nDATE OF ADDENDUM: 09/23/2026\nThe original impression was entered in error. The possible new 1.1 cm irregular mass in the left breast at 2 o'clock needs further evaluation.\nCORRECTED IMPRESSION: BI-RADS 0: Incomplete. Need additional imaging evaluation.\nRECOMMENDATION: Diagnostic mammogram and targeted ultrasound of the left breast."},{"id":"P9-dx","patient":"P9","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-09-29","text":"EXAM: Diagnostic mammogram, left breast, with spot compression views. Targeted left breast ultrasound.\nDATE: 09/29/2026\nINDICATION: Recall from screening 09/22/2026 for a possible left breast mass.\nFINDINGS: Spot compression views of the left breast at 2 o'clock show the finding disperses, consistent with overlapping fibroglandular tissue. Targeted ultrasound at 2 o'clock shows normal fibroglandular tissue without a mass.\nIMPRESSION: No mammographic or sonographic abnormality. BI-RADS 1: Negative.\nRECOMMENDATION: Return to annual screening."},{"id":"P10-dx","patient":"P10","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-09-08","text":"EXAM: Bilateral diagnostic mammogram. Bilateral targeted breast ultrasound.\nDATE: 09/08/2026\nINDICATION: 68-year-old woman recalled from screening on 09/01/2026 for findings in both breasts.\nCOMPARISON: 08/28/2025.\nFINDINGS: Right breast: at 10 o'clock, 4 cm from the nipple, there is a 1.2 cm oval hypoechoic mass with indistinct margins, new since the prior exam. Left breast: at 2 o'clock, 3 cm from the nipple, there is a 6 mm oval circumscribed hypoechoic mass parallel to the skin, without suspicious features.\nIMPRESSION:\n1. Right breast mass at 10 o'clock. BI-RADS 4A: Low suspicion for malignancy.\n2. Left breast mass at 2 o'clock, probably benign. BI-RADS 3: Probably benign.\nOVERALL ASSESSMENT: BI-RADS 4A.\nRECOMMENDATION: Ultrasound-guided core needle biopsy of the right breast mass. Follow-up ultrasound of the left breast in 6 months."},{"id":"P10-path","patient":"P10","kind":"pathology","title":"Pathology report","date":"2026-09-18","imaging":"P10-dx","text":"SURGICAL PATHOLOGY REPORT\nSPECIMEN: Right breast, 10 o'clock, ultrasound-guided core needle biopsy\nPROCEDURE DATE: 09/15/2026\nDIAGNOSIS: Fibroadenoma. Negative for atypia and malignancy.\nCOMMENT: Findings discussed with the breast imaging team for radiology-pathology correlation."},{"id":"P11-dx","patient":"P11","kind":"imaging","title":"Diagnostic mammogram and ultrasound","date":"2026-10-05","text":"EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound.\nDATE: 10/05/2026\nINDICATION: 72-year-old woman recalled from screening on 09/28/2026 for a left breast mass.\nCOMPARISON: 10/02/2024.\nFINDINGS: In the left breast at 2 o'clock, 7 cm from the nipple, there is a 1.3 cm irregular mass with spiculated margins and associated architectural distortion, new since the prior exam. Ultrasound shows a corresponding irregular, non-parallel hypoechoic mass with angular margins and posterior acoustic shadowing. No suspicious left axillary lymph nodes.\nIMPRESSION: Suspicious left breast mass. BI-RADS 4C: High suspicion for malignancy.\nRECOMMENDATION: Ultrasound-guided core needle biopsy of the left breast mass. The recommendation was discussed with the patient."},{"id":"P11-path","patient":"P11","kind":"pathology","title":"Pathology report","date":"2026-10-12","imaging":"P11-dx","text":"SURGICAL PATHOLOGY REPORT\nSPECIMEN: Left breast, 2 o'clock, ultrasound-guided core needle biopsy\nPROCEDURE DATE: 10/09/2026\nDIAGNOSIS: Benign breast tissue with fibrocystic changes and stromal fibrosis. Negative for atypia and malignancy.\nCOMMENT: Findings discussed with the breast imaging team for radiology-pathology correlation."},{"id":"P11-path2","patient":"P11","kind":"pathology","title":"Pathology report, repeat biopsy","date":"2026-10-23","imaging":"P11-dx","text":"SURGICAL PATHOLOGY REPORT\nSPECIMEN: Left breast, 2 o'clock, ultrasound-guided vacuum-assisted biopsy (repeat)\nPROCEDURE DATE: 10/20/2026\nDIAGNOSIS: Invasive lobular carcinoma, classic type, Nottingham grade 2.\nBIOMARKERS: Estrogen receptor positive. Progesterone receptor positive. HER2 negative."}];
     },
     "data/replies.json": function (module, exports, require, __dirname) {
-module.exports = [{"id":"P2-r1","patient":"P2","text":"Got it, booked for Thursday the 10th. Thanks!"},{"id":"P3-r1","patient":"P3","text":"I want to come but I don't drive and my son works all day. I have no way to get there."},{"id":"P3-r2","patient":"P3","text":"Thank you, the ride works. I booked Tuesday at 9."},{"id":"P5-r1","patient":"P5","text":"Booked for October 8. Thank you for the reminder."},{"id":"P7-r1","patient":"P7","text":"I'm really scared this means I have cancer. I haven't slept since the appointment. Can someone call me?"},{"id":"P8-r1","patient":"P8","text":"Booked for Monday morning."},{"id":"P9-r1","patient":"P9","text":"OK I scheduled it for the 29th."},{"id":"P10-r1","patient":"P10","text":"Got it. I booked the biopsy for Tuesday the 15th."}];
+module.exports = [{"id":"P2-r1","patient":"P2","text":"Got it, booked for Thursday the 10th. Thanks!"},{"id":"P3-r1","patient":"P3","text":"I want to come but I don't drive and my son works all day. I have no way to get there."},{"id":"P3-r2","patient":"P3","text":"Thank you, the ride works. I booked Tuesday at 9."},{"id":"P5-r1","patient":"P5","text":"Booked for October 8. Thank you for the reminder."},{"id":"P7-r1","patient":"P7","text":"I'm really scared this means I have cancer. I haven't slept since the appointment. Can someone call me?"},{"id":"P8-r1","patient":"P8","text":"Booked for Monday morning."},{"id":"P9-r1","patient":"P9","text":"OK I scheduled it for the 29th."},{"id":"P10-r1","patient":"P10","text":"Got it. I booked the biopsy for Tuesday the 15th."},{"id":"P11-r1","patient":"P11","text":"My doctor's office called and said the biopsy was benign. Why would I need another one?"}];
     },
     "data/sample-replies.json": function (module, exports, require, __dirname) {
 module.exports = [{"id":"S-time","label":"Wants another day","text":"Can I come on a different day? Next week is bad for me."},{"id":"S-work","label":"Can't come because of work","text":"Thursday doesn't work, I start work at 7. Is there anything on a Saturday or after 5?"},{"id":"S-question","label":"Asks a medical question","text":"Will the biopsy hurt? And how long until they know what it is?"},{"id":"S-decline","label":"Turns down the test","text":"I've thought about it and I don't want the biopsy. Please take me off this list."},{"id":"S-wrong","label":"Wrong number","text":"Sorry, wrong number. I don't know who that is."},{"id":"S-childcare","label":"No one to watch her kids","text":"I can't come in during the day, there's nobody to watch my kids."},{"id":"S-unclear","label":"Unclear reply","text":"ok"}];
     },
     "data/patients.json": function (module, exports, require, __dirname) {
-module.exports = [{"id":"P1","name":"Ana R.","first":"Ana","age":52,"path":"BI-RADS 1. Routine, so the agent stays quiet.","first_doc":"P1-screen","arrives":"2026-09-02","reactions":[]},{"id":"P2","name":"Grace T.","first":"Grace","age":47,"path":"BI-RADS 0. Books from the first text.","first_doc":"P2-screen","arrives":"2026-09-01","reactions":[{"when":"outreach","doc":"P2-screen","after":1,"reply":"P2-r1","book":{"appt":"2026-09-10","kind":"imaging","result":"P2-dx"}}]},{"id":"P3","name":"Marisol V.","first":"Marisol","age":61,"path":"BI-RADS 0. Needs a ride.","first_doc":"P3-screen","arrives":"2026-09-03","reactions":[{"when":"outreach","doc":"P3-screen","after":1,"reply":"P3-r1"},{"when":"transport","after":0,"reply":"P3-r2","book":{"appt":"2026-09-08","kind":"imaging","result":"P3-dx"}}]},{"id":"P4","name":"Denise W.","first":"Denise","age":55,"path":"BI-RADS 0. No answer, so a navigator takes over.","first_doc":"P4-screen","arrives":"2026-09-14","reactions":[{"when":"handoff","after":3,"person":"Nurse navigator","note":"Reached her by phone. Her number had changed, and the new one is now on file. She booked her diagnostic mammogram.","book":{"appt":"2026-09-25","kind":"imaging","result":"P4-dx"}}]},{"id":"P5","name":"Linda K.","first":"Linda","age":58,"path":"BI-RADS 3. On time.","first_doc":"P5-apr","arrives":"2026-09-01","source":"Already on the six-month follow-up list","reactions":[{"when":"outreach","doc":"P5-apr","after":0,"reply":"P5-r1","book":{"appt":"2026-10-08","kind":"imaging","result":"P5-6mo"}}]},{"id":"P6","name":"Tamika J.","first":"Tamika","age":49,"path":"BI-RADS 3. Missed, so a navigator takes over.","first_doc":"P6-apr","arrives":"2026-09-01","source":"Already on the six-month follow-up list","reactions":[{"when":"handoff","after":1,"person":"Nurse navigator","note":"Called and left a voicemail. Mailed a letter to her home address."}]},{"id":"P7","name":"Priya S.","first":"Priya","age":44,"path":"BI-RADS 4. Scared, so a navigator calls her.","first_doc":"P7-dx","arrives":"2026-09-14","reactions":[{"when":"outreach","doc":"P7-dx","after":0,"reply":"P7-r1"},{"when":"handoff","after":1,"person":"Nurse navigator","note":"Called her and talked through what a core biopsy involves. She asked to bring her sister. She booked the biopsy.","book":{"appt":"2026-09-21","kind":"biopsy","result":"P7-path","resultAfter":3}},{"when":"concordance","after":1,"person":"Radiologist","note":"The benign fibroadenoma matches the imaging. Concordant. Back to annual screening."}]},{"id":"P8","name":"Helen M.","first":"Helen","age":67,"path":"BI-RADS 5. Cancer, handed to breast surgery.","first_doc":"P8-dx","arrives":"2026-09-16","reactions":[{"when":"outreach","doc":"P8-dx","after":0,"reply":"P8-r1","book":{"appt":"2026-09-21","kind":"biopsy","result":"P8-path","resultAfter":3}}]},{"id":"P9","name":"Rosa D.","first":"Rosa","age":63,"path":"Unclear report. Held for a radiologist.","first_doc":"P9-screen","arrives":"2026-09-22","reactions":[{"when":"hold","after":1,"person":"Radiologist","note":"Reviewed the report. The impression was entered in error. Issued an addendum.","doc":"P9-addendum"},{"when":"outreach","doc":"P9-addendum","after":0,"reply":"P9-r1","book":{"appt":"2026-09-29","kind":"imaging","result":"P9-dx"}}]},{"id":"P10","name":"Joyce K.","first":"Joyce","age":68,"path":"Findings in both breasts: right BI-RADS 4A, left BI-RADS 3. Books the right biopsy, which is benign. The left side stays on its own six-month track.","first_doc":"P10-dx","arrives":"2026-09-08","reactions":[{"when":"outreach","doc":"P10-dx","side":"right","after":1,"reply":"P10-r1","book":{"appt":"2026-09-15","kind":"biopsy","result":"P10-path","resultAfter":3}},{"when":"concordance","side":"right","after":1,"person":"Radiologist","note":"Fibroadenoma matches the right breast imaging. Concordant."}]}];
+module.exports = [{"id":"P1","name":"Ana R.","first":"Ana","age":52,"path":"BI-RADS 1. Routine, so the agent stays quiet.","first_doc":"P1-screen","arrives":"2026-09-02","reactions":[]},{"id":"P2","name":"Grace T.","first":"Grace","age":47,"path":"BI-RADS 0. Books from the first text.","first_doc":"P2-screen","arrives":"2026-09-01","reactions":[{"when":"outreach","doc":"P2-screen","after":1,"reply":"P2-r1","book":{"appt":"2026-09-10","kind":"imaging","result":"P2-dx"}}]},{"id":"P3","name":"Marisol V.","first":"Marisol","age":61,"path":"BI-RADS 0. Needs a ride.","first_doc":"P3-screen","arrives":"2026-09-03","reactions":[{"when":"outreach","doc":"P3-screen","after":1,"reply":"P3-r1"},{"when":"transport","after":0,"reply":"P3-r2","book":{"appt":"2026-09-08","kind":"imaging","result":"P3-dx"}}]},{"id":"P4","name":"Denise W.","first":"Denise","age":55,"path":"BI-RADS 0. No answer, so a navigator takes over.","first_doc":"P4-screen","arrives":"2026-09-14","reactions":[{"when":"handoff","after":3,"person":"Nurse navigator","note":"Reached her by phone. Her number had changed, and the new one is now on file. She booked her diagnostic mammogram.","book":{"appt":"2026-09-25","kind":"imaging","result":"P4-dx"}}]},{"id":"P5","name":"Linda K.","first":"Linda","age":58,"path":"BI-RADS 3. On time.","first_doc":"P5-apr","arrives":"2026-09-01","source":"Already on the six-month follow-up list","reactions":[{"when":"outreach","doc":"P5-apr","after":0,"reply":"P5-r1","book":{"appt":"2026-10-08","kind":"imaging","result":"P5-6mo"}}]},{"id":"P6","name":"Tamika J.","first":"Tamika","age":49,"path":"BI-RADS 3. Missed, so a navigator takes over.","first_doc":"P6-apr","arrives":"2026-09-01","source":"Already on the six-month follow-up list","reactions":[{"when":"handoff","after":1,"person":"Nurse navigator","note":"Called and left a voicemail. Mailed a letter to her home address."}]},{"id":"P7","name":"Priya S.","first":"Priya","age":44,"path":"BI-RADS 4. Scared, so a navigator calls her.","first_doc":"P7-dx","arrives":"2026-09-14","reactions":[{"when":"outreach","doc":"P7-dx","after":0,"reply":"P7-r1"},{"when":"handoff","after":1,"person":"Nurse navigator","note":"Called her and talked through what a core biopsy involves. She asked to bring her sister. She booked the biopsy.","book":{"appt":"2026-09-21","kind":"biopsy","result":"P7-path","resultAfter":3}},{"when":"concordance","after":1,"person":"Radiologist","note":"The benign fibroadenoma matches the imaging. Concordant. Back to annual screening."}]},{"id":"P8","name":"Helen M.","first":"Helen","age":67,"path":"BI-RADS 5. Cancer, handed to breast surgery.","first_doc":"P8-dx","arrives":"2026-09-16","reactions":[{"when":"outreach","doc":"P8-dx","after":0,"reply":"P8-r1","book":{"appt":"2026-09-21","kind":"biopsy","result":"P8-path","resultAfter":3}}]},{"id":"P9","name":"Rosa D.","first":"Rosa","age":63,"path":"Unclear report. Held for a radiologist.","first_doc":"P9-screen","arrives":"2026-09-22","reactions":[{"when":"hold","after":1,"person":"Radiologist","note":"Reviewed the report. The impression was entered in error. Issued an addendum.","doc":"P9-addendum"},{"when":"outreach","doc":"P9-addendum","after":0,"reply":"P9-r1","book":{"appt":"2026-09-29","kind":"imaging","result":"P9-dx"}}]},{"id":"P10","name":"Joyce K.","first":"Joyce","age":68,"path":"Findings in both breasts: right BI-RADS 4A, left BI-RADS 3. Books the right biopsy, which is benign. The left side stays on its own six-month track.","first_doc":"P10-dx","arrives":"2026-09-08","reactions":[{"when":"outreach","doc":"P10-dx","side":"right","after":1,"reply":"P10-r1","book":{"appt":"2026-09-15","kind":"biopsy","result":"P10-path","resultAfter":3}},{"when":"concordance","side":"right","after":1,"person":"Radiologist","note":"Fibroadenoma matches the right breast imaging. Concordant."}]},{"id":"P11","name":"Evelyn B.","first":"Evelyn","age":72,"path":"BI-RADS 4C. Her biopsy comes back benign, but the result doesn't explain a spiculated mass. The radiologist calls it a mismatch, and the agent follows her to a repeat biopsy, which finds cancer.","first_doc":"P11-dx","arrives":"2026-10-05","reactions":[{"when":"outreach","doc":"P11-dx","after":1,"book":{"appt":"2026-10-09","kind":"biopsy","result":"P11-path","resultAfter":3}},{"when":"concordance","after":1,"person":"Radiologist","decision":"discordant","note":"Not concordant. Fibrocystic change doesn't explain a spiculated mass with distortion, so the needle may have missed it. Recommend a repeat biopsy. Sent a note to her doctor."},{"when":"outreach","doc":"P11-path","after":1,"reply":"P11-r1"},{"when":"handoff","after":1,"person":"Nurse navigator","note":"Called her. Her doctor's office had told her the biopsy was benign, so she thought she was done. Explained that the radiologist needs more tissue because the result doesn't match the imaging. She booked the repeat biopsy.","book":{"appt":"2026-10-20","kind":"biopsy","result":"P11-path2","resultAfter":3}}]}];
     },
-    "reads/documents.json": function (module, exports, require, __dirname) {
-module.exports = {"P1-screen":{"doc_type":"screening","exam_date":"2026-09-02","side":"both","birads":"1","next_step":"Routine screening mammogram in 1 year","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"DATE: 09/02/2026","birads":"BI-RADS 1: Negative","next_step":"Routine screening mammogram in 1 year","pathology_result":null}},"P2-screen":{"doc_type":"screening","exam_date":"2026-09-01","side":"both","birads":"0","next_step":"Diagnostic mammogram of right breast with spot compression, ultrasound if needed","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"DATE: 09/01/2026","birads":"BI-RADS 0: Incomplete.","next_step":"Diagnostic mammogram of the right breast with spot compression views, and ultrasound if needed.","pathology_result":null}},"P2-dx":{"doc_type":"diagnostic","exam_date":"2026-09-10","side":"right","birads":"2","next_step":"Return to annual screening","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"DATE: 09/10/2026","birads":"BI-RADS 2: Benign","next_step":"Return to annual screening","pathology_result":null}},"P3-screen":{"doc_type":"screening","exam_date":"2026-09-03","side":"both","birads":"0","next_step":"Diagnostic mammogram and targeted ultrasound of the left breast","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"DATE: 09/03/2026","birads":"BI-RADS 0: Incomplete.","next_step":"Diagnostic mammogram and targeted ultrasound of the left breast.","pathology_result":null}},"P3-dx":{"doc_type":"diagnostic","exam_date":"2026-09-08","side":"left","birads":"2","next_step":"Return to annual screening","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"DATE: 09/08/2026","birads":"BI-RADS 2: Benign","next_step":"Return to annual screening.","pathology_result":null}},"P4-screen":{"doc_type":"screening","exam_date":"2026-09-14","side":"both","birads":"0","next_step":"Diagnostic mammogram of right breast with magnification views","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"DATE: 09/14/2026","birads":"BI-RADS 0: Incomplete.","next_step":"Diagnostic mammogram of the right breast with magnification views.","pathology_result":null}},"P4-dx":{"doc_type":"diagnostic","exam_date":"2026-09-25","side":"right","birads":"2","next_step":"Return to annual screening","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"DATE: 09/25/2026","birads":"BI-RADS 2: Benign","next_step":"Return to annual screening","pathology_result":null}},"P5-apr":{"doc_type":"diagnostic","exam_date":"2026-04-08","side":"left","birads":"3","next_step":"Short-interval follow-up diagnostic mammogram and ultrasound of left breast in 6 months","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"DATE: 04/08/2026","birads":"BI-RADS 3: Probably benign.","next_step":"Short-interval follow-up diagnostic mammogram and ultrasound of the left breast in 6 months.","pathology_result":null}},"P5-6mo":{"doc_type":"diagnostic","exam_date":"2026-10-08","side":"left","birads":"3","next_step":"Follow-up diagnostic mammogram and ultrasound in 6 months","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"DATE: 10/08/2026","birads":"BI-RADS 3: Probably benign","next_step":"Continued follow-up with diagnostic mammogram and ultrasound of the left breast in 6 months","pathology_result":null}},"P6-apr":{"doc_type":"ultrasound","exam_date":"2026-04-15","side":"right","birads":"3","next_step":"Follow-up right breast ultrasound in 6 months","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"DATE: 04/15/2026","birads":"BI-RADS 3: Probably benign","next_step":"Follow-up right breast ultrasound in 6 months","pathology_result":null}},"P7-dx":{"doc_type":"diagnostic","exam_date":"2026-09-14","side":"left","birads":"4B","next_step":"Ultrasound-guided core needle biopsy of left breast mass","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"DATE: 09/14/2026","birads":"BI-RADS 4B: Moderate suspicion for malignancy.","next_step":"Ultrasound-guided core needle biopsy of the left breast mass.","pathology_result":null}},"P7-path":{"doc_type":"pathology","exam_date":"2026-09-21","side":"left","birads":null,"next_step":null,"findings_match_impression":null,"mismatch_quote":null,"pathology_result":"benign","diagnosis":"Fibroadenoma, negative for atypia and malignancy","quotes":{"exam_date":"PROCEDURE DATE: 09/21/2026","birads":null,"next_step":null,"pathology_result":"Fibroadenoma. Negative for atypia and malignancy."}},"P8-dx":{"doc_type":"diagnostic","exam_date":"2026-09-16","side":"right","birads":"5","next_step":"Ultrasound-guided core needle biopsy of right breast mass","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"DATE: 09/16/2026","birads":"BI-RADS 5: Highly suggestive of malignancy.","next_step":"Ultrasound-guided core needle biopsy of the right breast mass.","pathology_result":null}},"P8-path":{"doc_type":"pathology","exam_date":"2026-09-21","side":"right","birads":null,"next_step":null,"findings_match_impression":null,"mismatch_quote":null,"pathology_result":"malignant","diagnosis":"Invasive ductal carcinoma, grade 2, ER+/PR+/HER2-","quotes":{"exam_date":"PROCEDURE DATE: 09/21/2026","birads":null,"next_step":null,"pathology_result":"Invasive ductal carcinoma, Nottingham grade 2."}},"P9-screen":{"doc_type":"screening","exam_date":"2026-09-22","side":"both","birads":"1","next_step":"Routine screening mammogram in 1 year","findings_match_impression":false,"mismatch_quote":"there is a possible new 1.1 cm irregular mass with indistinct margins","pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"DATE: 09/22/2026","birads":"BI-RADS 1: Negative","next_step":"Routine screening mammogram in 1 year","pathology_result":null}},"P9-addendum":{"doc_type":"addendum","exam_date":"2026-09-22","side":"left","birads":"0","next_step":"Diagnostic mammogram and targeted ultrasound of left breast","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"ADDENDUM to the screening mammogram of 09/22/2026","birads":"CORRECTED IMPRESSION: BI-RADS 0: Incomplete.","next_step":"Diagnostic mammogram and targeted ultrasound of the left breast.","pathology_result":null}},"P9-dx":{"doc_type":"diagnostic","exam_date":"2026-09-29","side":"left","birads":"1","next_step":"Return to annual screening","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"quotes":{"exam_date":"DATE: 09/29/2026","birads":"BI-RADS 1: Negative.","next_step":"Return to annual screening.","pathology_result":null}},"P10-dx":{"doc_type":"diagnostic","exam_date":"2026-09-08","side":"both","birads":"4A","next_step":"Ultrasound-guided core biopsy of right breast mass; left breast follow-up ultrasound in 6 months","findings_match_impression":true,"mismatch_quote":null,"pathology_result":null,"diagnosis":null,"breasts":[{"side":"right","birads":"4A","next_step":"Ultrasound-guided core needle biopsy","quotes":{"birads":"Right breast mass at 10 o'clock. BI-RADS 4A: Low suspicion for malignancy.","next_step":"Ultrasound-guided core needle biopsy of the right breast mass."}},{"side":"left","birads":"3","next_step":"Follow-up ultrasound in 6 months","quotes":{"birads":"Left breast mass at 2 o'clock, probably benign. BI-RADS 3: Probably benign.","next_step":"Follow-up ultrasound of the left breast in 6 months."}}],"quotes":{"exam_date":"DATE: 09/08/2026","birads":"OVERALL ASSESSMENT: BI-RADS 4A.","next_step":"Ultrasound-guided core needle biopsy of the right breast mass. Follow-up ultrasound of the left breast in 6 months.","pathology_result":null}},"P10-path":{"doc_type":"pathology","exam_date":"2026-09-15","side":"right","birads":null,"next_step":null,"findings_match_impression":null,"mismatch_quote":null,"pathology_result":"benign","diagnosis":"Fibroadenoma, negative for atypia and malignancy","breasts":[],"quotes":{"exam_date":"PROCEDURE DATE: 09/15/2026","birads":null,"next_step":null,"pathology_result":"Fibroadenoma. Negative for atypia and malignancy."}}};
+    "reads/comparisons.json": function (module, exports, require, __dirname) {
+module.exports = {"P7-path":{"imaging":"P7-dx","comparison":{"imaging":{"side":"left","size":"1.6 cm","margins":"partly indistinct","birads":"4B","quotes":{"size":"1.6 cm oval hypoechoic mass","margins":"partly indistinct margins","birads":"BI-RADS 4B: Moderate suspicion for malignancy"}},"pathology":{"diagnosis":"Fibroadenoma, negative for atypia and malignancy","quote":"Fibroadenoma. Negative for atypia and malignancy."},"match":"possible_mismatch","flags":[{"concern":"The mass has partly indistinct margins and internal vascularity and was rated BI-RADS 4B, which is less typical of a fibroadenoma than a circumscribed oval mass would be, so the benign result may not fully explain the finding.","imaging_quote":"partly indistinct margins and internal vascularity","pathology_quote":"Fibroadenoma. Negative for atypia and malignancy."}],"summary":"A 1.6 cm oval left breast mass at 1 o'clock with partly indistinct margins, rated BI-RADS 4B, was biopsied and showed fibroadenoma, negative for atypia and malignancy. Side and location agree between the reports. A fibroadenoma is a specific benign diagnosis and fits an oval mass, but the partly indistinct margins and moderate suspicion rating leave some doubt, so the radiologist should decide whether it explains the finding."}},"P8-path":{"imaging":"P8-dx","comparison":{"imaging":{"side":"right","size":"2.1 cm","margins":"spiculated","birads":"5","quotes":{"size":"2.1 cm irregular mass","margins":"spiculated margins","birads":"BI-RADS 5: Highly suggestive of malignancy"}},"pathology":{"diagnosis":"Invasive ductal carcinoma, Nottingham grade 2, ER positive, PR positive, HER2 negative","quote":"Invasive ductal carcinoma, Nottingham grade 2."},"match":"concordant","flags":[],"summary":"The right breast 10 o'clock mass is a 2.1 cm irregular, spiculated, BI-RADS 5 lesion with fine pleomorphic calcifications. Core biopsy from the right breast at 10 o'clock shows invasive ductal carcinoma, grade 2, ER and PR positive, HER2 negative. Malignancy in a highly suspicious finding is concordant, and side and location agree between the reports. Final concordance decision rests with the radiologist."}},"P10-path":{"imaging":"P10-dx","comparison":{"imaging":{"side":"right","size":"1.2 cm","margins":"oval hypoechoic mass with indistinct margins, new since the prior exam","birads":"4A","quotes":{"size":"1.2 cm","margins":"indistinct margins","birads":"BI-RADS 4A"}},"pathology":{"diagnosis":"Fibroadenoma, with no atypia and no malignancy","quote":"Fibroadenoma. Negative for atypia and malignancy."},"match":"possible_mismatch","flags":[{"concern":"The mass has indistinct margins, which is a suspicious feature, and it is new in a 68-year-old woman. A fibroadenoma may not fully explain that appearance, so the radiologist should decide whether the result fits.","imaging_quote":"oval hypoechoic mass with indistinct margins, new since the prior exam","pathology_quote":"Fibroadenoma. Negative for atypia and malignancy."}],"summary":"The biopsied right breast 10 o'clock mass (1.2 cm, oval, indistinct margins, BI-RADS 4A) was a fibroadenoma with no atypia or malignancy. The side and location match between the reports. The benign diagnosis fits the oval shape, but the indistinct margins and the fact that the mass is new in a 68-year-old woman may not be fully explained, so concordance is left to the radiologist. The left breast BI-RADS 3 mass was not biopsied."}},"P11-path":{"imaging":"P11-dx","comparison":{"imaging":{"side":"left","size":"1.3 cm","margins":"spiculated margins, irregular shape, angular margins on ultrasound, with architectural distortion","birads":"4C","quotes":{"size":"1.3 cm irregular mass","margins":"spiculated margins","birads":"BI-RADS 4C: High suspicion for malignancy"}},"pathology":{"diagnosis":"Benign breast tissue with fibrocystic changes and stromal fibrosis, negative for atypia and malignancy","quote":"Benign breast tissue with fibrocystic changes and stromal fibrosis. Negative for atypia and malignancy."},"match":"possible_mismatch","flags":[{"concern":"A nonspecific benign result (fibrocystic changes and stromal fibrosis) does not clearly explain a highly suspicious irregular, spiculated mass with architectural distortion.","imaging_quote":"irregular mass with spiculated margins and associated architectural distortion","pathology_quote":"Benign breast tissue with fibrocystic changes and stromal fibrosis."},{"concern":"The finding is BI-RADS 4C (high suspicion for malignancy), but the biopsy shows no malignancy, which raises the possibility of sampling error or a missed target.","imaging_quote":"BI-RADS 4C: High suspicion for malignancy","pathology_quote":"Negative for atypia and malignancy."}],"summary":"Left breast 2 o'clock biopsy site matches the location of a new 1.3 cm irregular, spiculated mass with architectural distortion, rated BI-RADS 4C. Pathology shows nonspecific benign fibrocystic changes and stromal fibrosis, which may not explain this highly suspicious finding. The radiologist should decide whether this is concordant or whether the sampling needs review."}},"P11-path2":{"imaging":"P11-dx","comparison":{"imaging":{"side":"left","size":"1.3 cm","margins":"spiculated margins, irregular shape, with architectural distortion; angular margins on ultrasound","birads":"4C","quotes":{"size":"1.3 cm irregular mass","margins":"spiculated margins","birads":"BI-RADS 4C: High suspicion for malignancy"}},"pathology":{"diagnosis":"Invasive lobular carcinoma, classic type, Nottingham grade 2, ER positive, PR positive, HER2 negative","quote":"Invasive lobular carcinoma, classic type, Nottingham grade 2."},"match":"concordant","flags":[],"summary":"A 1.3 cm irregular, spiculated left breast mass at 2 o'clock with architectural distortion (BI-RADS 4C) was biopsied. Pathology from the left breast at 2 o'clock shows invasive lobular carcinoma, which is a malignant diagnosis that fits a highly suspicious finding. Side and location agree between the reports. The pathology specimen is labeled as a repeat biopsy, and no earlier biopsy result is included here."}}};
     },
     "reads/replies.json": function (module, exports, require, __dirname) {
-module.exports = {"P2-r1":{"labels":["booked"],"quote":"booked for Thursday the 10th","summary":"She says she booked her appointment for Thursday the 10th."},"P3-r1":{"labels":["transport_barrier"],"quote":"I don't drive and my son works all day. I have no way to get there.","summary":"She wants to attend the appointment but has no transportation because she doesn't drive and her son is at work."},"P3-r2":{"labels":["booked"],"quote":"I booked Tuesday at 9.","summary":"She booked an appointment for Tuesday at 9 and says the ride arrangement works for her."},"P5-r1":{"labels":["booked"],"quote":"Booked for October 8.","summary":"She says she has booked her appointment for October 8 and thanks us for the reminder."},"P7-r1":{"labels":["scared_or_worried","other"],"quote":"I'm really scared this means I have cancer. I haven't slept since the appointment. Can someone call me?","summary":"She is very scared she may have cancer, has not been sleeping, and is asking for someone to phone her."},"P8-r1":{"labels":["booked"],"quote":"Booked for Monday morning.","summary":"She says she has booked her appointment for Monday morning."},"P9-r1":{"labels":["booked"],"quote":"I scheduled it for the 29th","summary":"She says she scheduled her appointment for the 29th."},"P10-r1":{"labels":["booked"],"quote":"I booked the biopsy for Tuesday the 15th","summary":"She says she has booked her biopsy for Tuesday the 15th."}};
+module.exports = {"P2-r1":{"labels":["booked"],"quote":"booked for Thursday the 10th","summary":"She says she booked her appointment for Thursday the 10th."},"P3-r1":{"labels":["transport_barrier"],"quote":"I don't drive and my son works all day. I have no way to get there.","summary":"She wants to attend the appointment but has no transportation because she doesn't drive and her son is at work."},"P3-r2":{"labels":["booked"],"quote":"I booked Tuesday at 9.","summary":"She booked an appointment for Tuesday at 9 and says the ride arrangement works for her."},"P5-r1":{"labels":["booked"],"quote":"Booked for October 8.","summary":"She says she has booked her appointment for October 8 and thanks us for the reminder."},"P7-r1":{"labels":["scared_or_worried","other"],"quote":"I'm really scared this means I have cancer. I haven't slept since the appointment. Can someone call me?","summary":"She is very scared she may have cancer, has not been sleeping, and is asking for someone to phone her."},"P8-r1":{"labels":["booked"],"quote":"Booked for Monday morning.","summary":"She says she has booked her appointment for Monday morning."},"P9-r1":{"labels":["booked"],"quote":"I scheduled it for the 29th","summary":"She says she scheduled her appointment for the 29th."},"P10-r1":{"labels":["booked"],"quote":"I booked the biopsy for Tuesday the 15th","summary":"She says she has booked her biopsy for Tuesday the 15th."},"P11-r1":{"labels":["medical_question"],"quote":"Why would I need another one?","summary":"She says her doctor's office told her the biopsy was benign and asks why she needs another one."}};
     },
     "reads/sample-replies.json": function (module, exports, require, __dirname) {
 module.exports = {"S-time":{"labels":["wants_new_time"],"quote":"Can I come on a different day? Next week is bad for me.","summary":"She is asking to come on a different day because next week doesn't work for her."},"S-work":{"labels":["wants_new_time","other_barrier"],"quote":"Thursday doesn't work, I start work at 7. Is there anything on a Saturday or after 5?","summary":"She can't make Thursday because of her work schedule and asks for a Saturday or after-5pm appointment."},"S-question":{"labels":["medical_question"],"quote":"Will the biopsy hurt? And how long until they know what it is?","summary":"She is asking whether the biopsy will be painful and how long the results will take."},"S-decline":{"labels":["declines_care"],"quote":"I don't want the biopsy. Please take me off this list.","summary":"She has decided against the biopsy and asks to be removed from the messaging list."},"S-wrong":{"labels":["wrong_number"],"quote":"wrong number. I don't know who that is.","summary":"The message reached the wrong person, who does not know who is texting."},"S-childcare":{"labels":["other_barrier","wants_new_time"],"quote":"I can't come in during the day, there's nobody to watch my kids.","summary":"She can't attend daytime appointments because she has no childcare, so she likely needs a different time."},"S-unclear":{"labels":["other"],"quote":"ok","summary":"She replied only 'ok', which doesn't say whether she booked or what she plans to do."}};
@@ -1893,10 +2155,11 @@ window.startWorkspaceApp = function () {
   const STATES = { queued: 'Queued', reading: 'Reading report', read_failed: 'Read failed · retry', needs_review: 'Needs a person', closed: 'Closed',
     awaiting_booking: 'Waiting for booking', waiting_reminder: 'Reminder scheduled', booked: 'Booked', awaiting_result: 'Waiting for result' };
   const KINDS = { report_saved: 'Report saved', reply_saved: 'Reply saved', reader_requested: 'Read requested', read_completed: 'Read returned', read_failed: 'Read failed',
-    read_retried: 'Retried', read_recovered: 'Recovered after restart', doc: 'Report arrived', read: 'Claude read it', validation_passed: 'Checks passed',
+    read_retried: 'Retried', read_recovered: 'Recovered after restart', doc: 'Report arrived', read: 'Rules read it', validation_passed: 'Checks passed',
     validation_held: 'Checks failed', pathway: 'Pathway', text: 'Text', portal: 'Portal message', call: 'Automated call', reply: 'Her reply',
     readreply: 'Claude read her reply', note: 'Note', booked: 'Schedule checked', appt: 'Appointment', handoff: 'Handed to a person',
-    headsup: 'Heads-up', pcp: 'Note to the PCP', overdue: 'Overdue', close: 'Case closed', person: 'A person acted', after_close: 'After closing' };
+    headsup: 'Heads-up', pcp: 'Note to the PCP', overdue: 'Overdue', close: 'Case closed', person: 'A person acted', after_close: 'After closing',
+    compare: 'Imaging and pathology compared', flag: 'Possible mismatch', split: 'Split by breast' };
   const CHANNELS = { text: 'Text', portal: 'Portal message', call: 'Automated call' };
   const LABELS = { booked: 'Says she booked', wants_new_time: 'Wants another time', transport_barrier: 'No ride', other_barrier: 'Other barrier',
     scared_or_worried: 'Scared or worried', medical_question: 'Medical question', declines_care: 'Declines care', wrong_number: 'Wrong number', other: 'Other' };
@@ -2046,16 +2309,40 @@ window.startWorkspaceApp = function () {
     $('person-reason').textContent = open.reason;
     $('resume').hidden = !(a && a.can.resume);
     $('concordant').hidden = open.kind !== 'concordance';
-    $('person-hint').textContent = open.kind === 'hold' ? 'Add the corrected report under Reports. If it passes the checks, the agent picks the case back up.'
+    $('discordant').hidden = open.kind !== 'concordance';
+    $('person-hint').textContent = open.kind === 'concordance' ? 'If it doesn’t match, the agent tells her doctor and follows her to a repeat biopsy.'
+      : open.kind === 'hold' ? 'Add the corrected report under Reports. If it passes the checks, the agent picks the case back up.'
       : open.kind === 'exception' ? (a && a.can.book ? 'The navigator can book her under Test schedule.' : 'Add the missing report under Reports, or close the case.') : '';
     $('close-form').dataset.review = open.id;
     $('resume').dataset.review = open.id;
     $('concordant').dataset.review = open.id;
+    $('discordant').dataset.review = open.id;
+  }
+  // Claude's side-by-side summary of the latest biopsy result and the imaging, with what it flagged.
+  function renderComparison(item) {
+    const box = $('comparison'); box.replaceChildren();
+    const e = [...item.events].reverse().find(x => x.kind === 'compare');
+    box.hidden = !e;
+    if (!e) return;
+    const x = e.meta && e.meta.comparison;
+    box.append(element('p', 'Imaging and pathology, side by side', 'eyebrow'));
+    if (!x) { box.append(element('p', e.detail, 'muted small')); return; }
+    const table = element('table'), head = element('tr');
+    head.append(element('th', ''), element('th', 'Imaging'), element('th', 'Pathology'));
+    const thead = element('thead'); thead.append(head);
+    const tbody = element('tbody'), im = x.imaging || {}, path = item.read && item.read.doc_type === 'pathology' ? item.read : null;
+    for (const [label, a, b] of [['Breast', im.side, path && path.side], ['Finding', [im.size, im.margins].filter(Boolean).join(', '), x.pathology && x.pathology.diagnosis], ['BI-RADS', im.birads, '']]) {
+      const tr = element('tr'); tr.append(element('th', label), element('td', a || ''), element('td', b || '')); tbody.append(tr);
+    }
+    table.append(thead, tbody);
+    box.append(table, element('p', x.match === 'concordant' ? 'Claude’s call: the result fits the imaging.' : x.match === 'possible_mismatch' ? 'Claude’s call: possible mismatch. The radiologist decides.' : 'Claude’s call: not enough to compare. The radiologist decides.', x.match === 'concordant' ? 'ok small' : 'error'));
+    if (x.flags && x.flags.length) { const ul = element('ul', undefined, 'problem-list'); x.flags.forEach(f => ul.append(element('li', f.concern))); box.append(ul); }
+    box.append(element('p', x.summary, 'muted small'));
   }
   function renderComing(item) {
     const list = $('coming'); list.replaceChildren();
     const coming = item.agent ? item.agent.coming : [];
-    if (!item.agent) list.append(element('li', 'Claude reads the report first.', 'muted note'));
+    if (!item.agent) list.append(element('li', 'The rules read the report first.', 'muted note'));
     else if (item.status === 'closed') list.append(element('li', 'Nothing. The case is closed.', 'muted note'));
     else if (!coming.length) list.append(element('li', 'Nothing scheduled.', 'muted note'));
     for (const c of coming) { const li = element('li'); li.append(element('time', fmtDay(c.date)), element('span', c.what)); list.append(li); }
@@ -2101,20 +2388,20 @@ window.startWorkspaceApp = function () {
       const head = element('div', undefined, 'report-head');
       head.append(element('b', (r.read && TITLES[r.read.doc_type]) || (i ? 'Next report' : 'First report')), element('span', when(r.createdAt), 'muted small'));
       card.append(head);
-      if (r.status === 'queued' || r.status === 'reading') card.append(element('p', 'Claude is reading this report…', 'muted'));
+      if (r.status === 'queued' || r.status === 'reading') card.append(element('p', 'Reading this report…', 'muted'));
       else if (r.status === 'read_failed') {
         card.append(element('p', r.problems[0] || 'The read failed.', 'error'));
         const retry = element('button', 'Retry report read', 'secondary compact'); retry.type = 'button'; retry.addEventListener('click', retryReads); card.append(retry);
       } else {
         card.append(element('p', summaryOf(r.read)));
         if (r.problems.length) { const ul = element('ul', undefined, 'problem-list'); r.problems.forEach(p => ul.append(element('li', p))); card.append(ul); }
-        else card.append(element('p', 'Checks passed: every quote matches the report word for word.', 'ok small'));
+        else card.append(element('p', r.read && r.read.reader === 'rules' ? 'Checks passed: the rules read this report cleanly.' : 'Checks passed: every quote matches the report word for word.', 'ok small'));
       }
       const source = element('details'), pre = element('pre');
       const quotes = r.read && r.read.quotes ? Object.values(r.read.quotes) : [];
       pre.append(highlight(r.text, r.read && r.read.mismatch_quote ? [...quotes, r.read.mismatch_quote] : quotes, r.read && r.read.mismatch_quote));
       source.append(element('summary', 'Report and quoted evidence'), pre);
-      const raw = element('details'); raw.append(element('summary', 'Claude’s structured read'), element('pre', r.read ? JSON.stringify(r.read, null, 2) : 'No completed read yet.'));
+      const raw = element('details'); raw.append(element('summary', 'The structured read'), element('pre', r.read ? JSON.stringify(r.read, null, 2) : 'No completed read yet.'));
       card.append(source, raw);
       box.append(card);
     });
@@ -2142,14 +2429,14 @@ window.startWorkspaceApp = function () {
       : item.status === 'closed' ? 'Nothing to book. The case is closed.' : 'Nothing to book right now.';
     const pending = [...item.reports, ...item.replies].filter(i => i.status === 'queued' || i.status === 'reading').length;
     $('inputs-pending').hidden = !pending || !item.agent;
-    $('inputs-pending').textContent = pending ? `Claude is reading ${plural(pending, 'new item', 'new items')}…` : '';
+    $('inputs-pending').textContent = pending ? `Reading ${plural(pending, 'new item', 'new items')}…` : '';
   }
   function renderCase(item) {
     current = item;
     $('detail-empty').hidden = true; $('detail').hidden = false;
     $('detail-title').textContent = item.patient + (item.side && item.side !== 'both' ? ` · ${breast(item.side)}` : '');
     $('case-state').replaceWith(Object.assign(badge(item.status), { id: 'case-state' }));
-    renderFacts(item); renderTracks(item); renderPerson(item); renderComing(item); renderThread(item); renderReports(item); renderTimeline(item); renderForms(item);
+    renderFacts(item); renderTracks(item); renderPerson(item); renderComparison(item); renderComing(item); renderThread(item); renderReports(item); renderTimeline(item); renderForms(item);
   }
 
   /* ---------- loading ---------- */
@@ -2204,13 +2491,13 @@ window.startWorkspaceApp = function () {
       renderClock(health.clock);
       $('connection').classList.toggle('warning', health.runtime !== 'browser' && (!health.reader.configured || health.reader.mode === 'recorded'));
       $('connection').textContent = health.runtime === 'browser'
-        ? 'This demo runs in your browser with Claude’s recorded reads of the sample reports and replies. Pick samples to run the whole loop. To have Claude read new text live, run the workspace on your computer.'
+        ? 'This demo runs in your browser. Rules read any report you give it. Claude’s reads of the sample replies and its comparisons of the sample biopsy results were recorded earlier. To have Claude read new replies live, run the workspace on your computer.'
         : health.reader.mode === 'claude-code'
-        ? `Live mode through Claude Code on this computer. Claude reads every new report and reply with your Claude Code sign-in (${health.reader.model}). All messages go to the local test inbox.`
+        ? `Live mode through Claude Code on this computer. Rules read every report. Claude reads every reply and compares each biopsy result with the imaging, with your Claude Code sign-in (${health.reader.model}). All messages go to the local test inbox.`
         : health.reader.mode === 'recorded'
-        ? 'Recorded mode · no API calls. Claude’s reads of the bundled sample reports and replies were recorded earlier. Pick samples to run the whole loop. New text needs live mode.'
+        ? 'Recorded mode · no API calls. Rules read any report. Claude’s reads of the sample replies and its comparisons of the sample biopsy results were recorded earlier. A new reply needs live mode.'
         : health.reader.configured
-        ? `Live mode. Claude reads every report and reply with ${health.reader.model}. All messages go to the local test inbox.`
+        ? `Live mode. Rules read every report. Claude reads every reply and compares each biopsy result with the imaging, with ${health.reader.model}. All messages go to the local test inbox.`
         : 'Live reading needs an Anthropic API key. Add ANTHROPIC_API_KEY in your local .env file, then restart the server. You can save a report now and retry its read later.';
       if (!selected && data.cases.length) select(data.cases[0].id, true);
       const listSignature = JSON.stringify([selected, data.cases]);
@@ -2286,7 +2573,7 @@ window.startWorkspaceApp = function () {
     event.preventDefault();
     act(async () => { await post(`/api/cases/${selected}/reports`, { report: $('next-text').value }); $('next-text').value = ''; $('next-example').value = ''; }, 'next-error', $('next-send'));
   });
-  for (const [id, action] of [['resume', 'resume'], ['concordant', 'concordant']]) {
+  for (const [id, action] of [['resume', 'resume'], ['concordant', 'concordant'], ['discordant', 'discordant']]) {
     $(id).addEventListener('click', () => act(() => post(`/api/cases/${selected}/reviews/${$(id).dataset.review}`, { action }), 'person-error', $(id)));
   }
   $('close-form').addEventListener('submit', event => {

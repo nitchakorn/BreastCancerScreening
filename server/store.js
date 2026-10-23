@@ -9,7 +9,7 @@ const VERSION = 2;
 const fingerprint = parts => createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 const httpError = (status, message) => Object.assign(new Error(message), { status });
 const json = value => value === null || value === undefined ? null : JSON.parse(value);
-const META = ['short', 'channel', 'template', 'labels', 'who', 'handoffKind', 'ok'];
+const META = ['short', 'channel', 'template', 'labels', 'who', 'handoffKind', 'ok', 'comparison', 'match', 'rule'];
 
 // A database from milestone 1 has a different shape. Keep it under a new name and start fresh.
 function setAsideOldDatabase(filename) {
@@ -145,6 +145,12 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
     setSetting(key, value) { db.prepare('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').run(key, String(value)); },
     caseRow(id) { return db.prepare('SELECT * FROM cases WHERE id=?').get(id); },
     review(id) { return db.prepare('SELECT * FROM reviews WHERE id=?').get(id); },
+    // The latest imaging report on a case: what a pathology result is compared with.
+    imagingFor(caseId) {
+      const rows = db.prepare("SELECT text,read_json FROM inputs WHERE case_id=? AND type='report' AND status='read' ORDER BY created_at DESC,rowid DESC").all(caseId);
+      const row = rows.find(r => { const read = json(r.read_json); return read && read.doc_type && read.doc_type !== 'pathology'; });
+      return row ? row.text : null;
+    },
     list(today) {
       return db.prepare('SELECT id,patient,side,group_id,status,pathway,due,next_action,state_json,last_day,created_at,updated_at FROM cases ORDER BY created_at DESC,rowid DESC').all().map(row => {
         const c = json(row.state_json), day = today || (row.last_day !== null ? A.dateOf(row.last_day) : null), view = day ? agentView(c, day) : null;
@@ -217,9 +223,9 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
         if (!next) return null;
         db.prepare("UPDATE inputs SET status='reading',updated_at=? WHERE id=?").run(now, next.id);
         db.prepare("UPDATE cases SET status='reading',updated_at=? WHERE id=? AND state_json IS NULL").run(now, next.case_id);
-        const what = next.type === 'report' ? 'report' : 'reply';
-        event(next.case_id, 'system', 'reader_requested', mode === 'recorded' ? `Requested the matching recorded ${what} read. No model API call.`
-          : `Requested a live Claude structured read of the ${what}. Source text cannot select actions or tools.`, null, now);
+        event(next.case_id, 'system', 'reader_requested', next.type === 'report' ? 'Reading the report with the report rules. No model reads it.'
+          : mode === 'recorded' ? 'Requested the matching recorded reply read. No model API call.'
+          : 'Requested a live Claude structured read of the reply. Source text cannot select actions or tools.', null, now);
         return { ...next, status: 'reading' };
       });
     },
@@ -227,8 +233,11 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
       const row = db.prepare('SELECT case_id,type FROM inputs WHERE id=?').get(inputId);
       db.prepare("UPDATE inputs SET status='read',read_json=?,model=?,reader_mode=?,problems_json='[]',updated_at=? WHERE id=?")
         .run(result.read ? JSON.stringify(result.read) : null, result.model || null, result.mode || null, now, inputId);
-      event(row.case_id, 'system', 'read_completed', result.mode === 'recorded' ? `Used the recorded ${row.type} read; no model API call.`
-        : result.read && result.model ? `Live read returned by ${result.model}.` : 'No usable structured read was returned.', null, now);
+      const cmp = result.comparison;
+      event(row.case_id, 'system', 'read_completed', (result.mode === 'rules' ? 'The report rules read it.'
+        : result.mode === 'recorded' ? `Used the recorded ${row.type} read; no model API call.`
+        : result.read && result.model ? `Live read returned by ${result.model}.` : 'No usable structured read was returned.')
+        + (cmp && cmp.read ? (cmp.mode === 'recorded' ? ' Used Claude’s recorded comparison with the imaging report; no model API call.' : ` Claude (${cmp.model}) compared it with the imaging report.`) : ''), null, now);
     },
     inputProblems(inputId, problems) { db.prepare('UPDATE inputs SET problems_json=? WHERE id=?').run(JSON.stringify(problems), inputId); },
     note(caseId, kind, detail, now) { event(caseId, 'system', kind, detail, null, now); },

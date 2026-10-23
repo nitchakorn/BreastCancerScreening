@@ -1,14 +1,14 @@
 
 P1 Ana R. (BI-RADS 1. Routine, so the agent stays quiet.)
   day  1 Wed Sep 2  system  doc       Screening mammogram arrived.
-  day  1 Wed Sep 2  agent   read      Claude read the screening mammogram: BI-RADS 1, both breasts. Next step: Routine screening mammogram in 1 year.
-  day  1 Wed Sep 2  agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day  1 Wed Sep 2  agent   read      The rules read the screening mammogram: BI-RADS 1, both breasts. Next step: Routine screening mammogram in 1 year.
+  day  1 Wed Sep 2  agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day  1 Wed Sep 2  agent   close     Case closed. Routine screening. Next screen due Sep 2, 2027. No outreach needed.
 
 P2 Grace T. (BI-RADS 0. Books from the first text.)
   day  0 Tue Sep 1  system  doc       Screening mammogram arrived.
-  day  0 Tue Sep 1  agent   read      Claude read the screening mammogram: BI-RADS 0, both breasts. Next step: Diagnostic mammogram of right breast with spot compression, ultrasound if nee
-  day  0 Tue Sep 1  agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day  0 Tue Sep 1  agent   read      The rules read the screening mammogram: BI-RADS 0, both breasts. Next step: Diagnostic mammogram of the right breast with spot compression views, and 
+  day  0 Tue Sep 1  agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day  0 Tue Sep 1  agent   pathway   Pathway: diagnostic mammogram or ultrasound, due Sep 15, 2026. Outreach starts now.
   day  0 Tue Sep 1  agent   text      Hi Grace, this is Riverside Breast Center. Your care team would like you to come back for more imaging. You can book here: riverside.example/book. Rep
   day  1 Wed Sep 2  patient reply     Got it, booked for Thursday the 10th. Thanks!
@@ -18,14 +18,14 @@ P2 Grace T. (BI-RADS 0. Books from the first text.)
   day  8 Wed Sep 9  agent   text      Reminder: your appointment at Riverside Breast Center is tomorrow, Thu Sep 10. Reply if you need a ride or a different time.
   day  9 Thu Sep 10 system  appt      Appointment done.
   day  9 Thu Sep 10 system  doc       Diagnostic mammogram and ultrasound arrived.
-  day  9 Thu Sep 10 agent   read      Claude read the diagnostic mammogram and ultrasound: BI-RADS 2, right breast. Next step: Return to annual screening.
-  day  9 Thu Sep 10 agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day  9 Thu Sep 10 agent   read      The rules read the diagnostic mammogram and ultrasound: BI-RADS 2, right breast. Next step: Return to annual screening.
+  day  9 Thu Sep 10 agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day  9 Thu Sep 10 agent   close     Case closed. Resolved as BI-RADS 2. Back to routine screening.
 
 P3 Marisol V. (BI-RADS 0. Needs a ride.)
   day  2 Thu Sep 3  system  doc       Screening mammogram arrived.
-  day  2 Thu Sep 3  agent   read      Claude read the screening mammogram: BI-RADS 0, both breasts. Next step: Diagnostic mammogram and targeted ultrasound of the left breast.
-  day  2 Thu Sep 3  agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day  2 Thu Sep 3  agent   read      The rules read the screening mammogram: BI-RADS 0, both breasts. Next step: Diagnostic mammogram and targeted ultrasound of the left breast.
+  day  2 Thu Sep 3  agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day  2 Thu Sep 3  agent   pathway   Pathway: diagnostic mammogram or ultrasound, due Sep 17, 2026. Outreach starts now.
   day  2 Thu Sep 3  agent   text      Hi Marisol, this is Riverside Breast Center. Your care team would like you to come back for more imaging. You can book here: riverside.example/book. R
   day  3 Fri Sep 4  patient reply     I want to come but I don't drive and my son works all day. I have no way to get there.
@@ -38,14 +38,14 @@ P3 Marisol V. (BI-RADS 0. Needs a ride.)
   day  6 Mon Sep 7  agent   text      Reminder: your appointment at Riverside Breast Center is tomorrow, Tue Sep 8. Reply if you need a ride or a different time.
   day  7 Tue Sep 8  system  appt      Appointment done.
   day  7 Tue Sep 8  system  doc       Diagnostic mammogram and ultrasound arrived.
-  day  7 Tue Sep 8  agent   read      Claude read the diagnostic mammogram and ultrasound: BI-RADS 2, left breast. Next step: Return to annual screening.
-  day  7 Tue Sep 8  agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day  7 Tue Sep 8  agent   read      The rules read the diagnostic mammogram and ultrasound: BI-RADS 2, left breast. Next step: Return to annual screening.
+  day  7 Tue Sep 8  agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day  7 Tue Sep 8  agent   close     Case closed. Resolved as BI-RADS 2. Back to routine screening.
 
 P4 Denise W. (BI-RADS 0. No answer, so a navigator takes over.)
   day 13 Mon Sep 14 system  doc       Screening mammogram arrived.
-  day 13 Mon Sep 14 agent   read      Claude read the screening mammogram: BI-RADS 0, both breasts. Next step: Diagnostic mammogram of right breast with magnification views.
-  day 13 Mon Sep 14 agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day 13 Mon Sep 14 agent   read      The rules read the screening mammogram: BI-RADS 0, both breasts. Next step: Diagnostic mammogram of the right breast with magnification views.
+  day 13 Mon Sep 14 agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day 13 Mon Sep 14 agent   pathway   Pathway: diagnostic mammogram or ultrasound, due Sep 28, 2026. Outreach starts now.
   day 13 Mon Sep 14 agent   text      Hi Denise, this is Riverside Breast Center. Your care team would like you to come back for more imaging. You can book here: riverside.example/book. Re
   day 15 Wed Sep 16 agent   portal    Patient portal message: Please schedule your follow-up appointment at Riverside Breast Center. Book online at riverside.example/book or call 555-0142.
@@ -56,14 +56,14 @@ P4 Denise W. (BI-RADS 0. No answer, so a navigator takes over.)
   day 23 Thu Sep 24 agent   text      Reminder: your appointment at Riverside Breast Center is tomorrow, Fri Sep 25. Reply if you need a ride or a different time.
   day 24 Fri Sep 25 system  appt      Appointment done.
   day 24 Fri Sep 25 system  doc       Diagnostic mammogram arrived.
-  day 24 Fri Sep 25 agent   read      Claude read the diagnostic mammogram: BI-RADS 2, right breast. Next step: Return to annual screening.
-  day 24 Fri Sep 25 agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day 24 Fri Sep 25 agent   read      The rules read the diagnostic mammogram: BI-RADS 2, right breast. Next step: Return to annual screening.
+  day 24 Fri Sep 25 agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day 24 Fri Sep 25 agent   close     Case closed. Resolved as BI-RADS 2. Back to routine screening.
 
 P5 Linda K. (BI-RADS 3. On time.)
   day  0 Tue Sep 1  system  doc       Already on the six-month follow-up list. Diagnostic mammogram and ultrasound arrived.
-  day  0 Tue Sep 1  agent   read      Claude read the diagnostic mammogram and ultrasound: BI-RADS 3, left breast. Next step: Short-interval follow-up diagnostic mammogram and ultrasound o
-  day  0 Tue Sep 1  agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day  0 Tue Sep 1  agent   read      The rules read the diagnostic mammogram and ultrasound: BI-RADS 3, left breast. Next step: Short-interval follow-up diagnostic mammogram and ultrasoun
+  day  0 Tue Sep 1  agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day  0 Tue Sep 1  agent   pathway   Pathway: 6-month follow-up imaging, due Oct 8, 2026. Reminders start Sep 8, 2026.
   day  7 Tue Sep 8  agent   text      Hi Linda, this is Riverside Breast Center. Your 6-month follow-up imaging is due Oct 8, 2026. You can book here: riverside.example/book. Reply if you 
   day  7 Tue Sep 8  patient reply     Booked for October 8. Thank you for the reminder.
@@ -73,14 +73,14 @@ P5 Linda K. (BI-RADS 3. On time.)
   day 36 Wed Oct 7  agent   text      Reminder: your appointment at Riverside Breast Center is tomorrow, Thu Oct 8. Reply if you need a ride or a different time.
   day 37 Thu Oct 8  system  appt      Appointment done.
   day 37 Thu Oct 8  system  doc       6-month follow-up mammogram and ultrasound arrived.
-  day 37 Thu Oct 8  agent   read      Claude read the 6-month follow-up mammogram and ultrasound: BI-RADS 3, left breast. Next step: Follow-up diagnostic mammogram and ultrasound in 6 mont
-  day 37 Thu Oct 8  agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day 37 Thu Oct 8  agent   read      The rules read the 6-month follow-up mammogram and ultrasound: BI-RADS 3, left breast. Next step: Continued follow-up with diagnostic mammogram and ul
+  day 37 Thu Oct 8  agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day 37 Thu Oct 8  agent   close     Case closed. Stable at 6 months. Next imaging due Apr 8, 2027, so she stays on the six-month track.
 
 P6 Tamika J. (BI-RADS 3. Missed, so a navigator takes over.)
   day  0 Tue Sep 1  system  doc       Already on the six-month follow-up list. Diagnostic ultrasound arrived.
-  day  0 Tue Sep 1  agent   read      Claude read the diagnostic ultrasound: BI-RADS 3, right breast. Next step: Follow-up right breast ultrasound in 6 months.
-  day  0 Tue Sep 1  agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day  0 Tue Sep 1  agent   read      The rules read the diagnostic ultrasound: BI-RADS 3, right breast. Next step: Follow-up right breast ultrasound in 6 months.
+  day  0 Tue Sep 1  agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day  0 Tue Sep 1  agent   pathway   Pathway: 6-month follow-up imaging, due Oct 15, 2026. Reminders start Sep 15, 2026.
   day 14 Tue Sep 15 agent   text      Hi Tamika, this is Riverside Breast Center. Your 6-month follow-up imaging is due Oct 15, 2026. You can book here: riverside.example/book. Reply if yo
   day 21 Tue Sep 22 agent   portal    Patient portal message: Please schedule your follow-up appointment at Riverside Breast Center. Book online at riverside.example/book or call 555-0142.
@@ -94,8 +94,8 @@ P6 Tamika J. (BI-RADS 3. Missed, so a navigator takes over.)
 
 P7 Priya S. (BI-RADS 4. Scared, so a navigator calls her.)
   day 13 Mon Sep 14 system  doc       Diagnostic mammogram and ultrasound arrived.
-  day 13 Mon Sep 14 agent   read      Claude read the diagnostic mammogram and ultrasound: BI-RADS 4B, left breast. Next step: Ultrasound-guided core needle biopsy of left breast mass.
-  day 13 Mon Sep 14 agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day 13 Mon Sep 14 agent   read      The rules read the diagnostic mammogram and ultrasound: BI-RADS 4B, left breast. Next step: Ultrasound-guided core needle biopsy of the left breast ma
+  day 13 Mon Sep 14 agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day 13 Mon Sep 14 agent   pathway   Pathway: biopsy, due Sep 28, 2026. Outreach starts now.
   day 13 Mon Sep 14 agent   pcp       Note to the ordering PCP: BI-RADS 4B, biopsy recommended. The agent is helping her schedule it.
   day 13 Mon Sep 14 agent   text      Hi Priya, this is Riverside Breast Center. Your care team asked us to help you schedule the appointment they discussed with you. You can book here: ri
@@ -108,16 +108,18 @@ P7 Priya S. (BI-RADS 4. Scared, so a navigator calls her.)
   day 20 Mon Sep 21 system  appt      Biopsy done.
   day 20 Mon Sep 21 agent   pathway   Watching for the pathology result, due Oct 1, 2026. The agent never gives results to the patient.
   day 23 Thu Sep 24 system  doc       Pathology report arrived.
-  day 23 Thu Sep 24 agent   read      Claude read the pathology report: benign (Fibroadenoma, negative for atypia and malignancy).
-  day 23 Thu Sep 24 agent   check     Checks passed. Every quote matches the report word for word.
-  day 23 Thu Sep 24 agent   handoff   Handed to the radiologist. Benign result (Fibroadenoma, negative for atypia and malignancy). A person confirms it matches the imaging before the case 
+  day 23 Thu Sep 24 agent   read      The rules read the pathology report: benign (Fibroadenoma, negative for atypia and malignancy).
+  day 23 Thu Sep 24 agent   check     Checks passed. The diagnosis is one the rules know.
+  day 23 Thu Sep 24 agent   compare   Claude compared the imaging and pathology reports. A 1.6 cm oval left breast mass at 1 o'clock with partly indistinct margins, rated BI-RADS 4B, was b
+  day 23 Thu Sep 24 agent   flag      Possible mismatch: The mass has partly indistinct margins and internal vascularity and was rated BI-RADS 4B, which is less typical of a fibroadenoma t
+  day 23 Thu Sep 24 agent   handoff   Handed to the radiologist. Benign result: fibroadenoma, negative for atypia and malignancy. It may not match the imaging. The mass has partly indistin
   day 24 Fri Sep 25 person  person    The benign fibroadenoma matches the imaging. Concordant. Back to annual screening.
   day 24 Fri Sep 25 agent   close     Case closed. Benign and concordant. Back to annual screening.
 
 P8 Helen M. (BI-RADS 5. Cancer, handed to breast surgery.)
   day 15 Wed Sep 16 system  doc       Diagnostic mammogram and ultrasound arrived.
-  day 15 Wed Sep 16 agent   read      Claude read the diagnostic mammogram and ultrasound: BI-RADS 5, right breast. Next step: Ultrasound-guided core needle biopsy of right breast mass.
-  day 15 Wed Sep 16 agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day 15 Wed Sep 16 agent   read      The rules read the diagnostic mammogram and ultrasound: BI-RADS 5, right breast. Next step: Ultrasound-guided core needle biopsy of the right breast m
+  day 15 Wed Sep 16 agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day 15 Wed Sep 16 agent   pathway   Pathway: biopsy, due Sep 30, 2026. Outreach starts now.
   day 15 Wed Sep 16 agent   headsup   Heads-up to the nurse navigator: a BI-RADS 5 was read today. The agent is handling outreach, and the case doesn't wait on her.
   day 15 Wed Sep 16 agent   pcp       Note to the ordering PCP: BI-RADS 5, biopsy recommended. The agent is helping her schedule it.
@@ -130,21 +132,22 @@ P8 Helen M. (BI-RADS 5. Cancer, handed to breast surgery.)
   day 20 Mon Sep 21 system  appt      Biopsy done.
   day 20 Mon Sep 21 agent   pathway   Watching for the pathology result, due Oct 1, 2026. The agent never gives results to the patient.
   day 23 Thu Sep 24 system  doc       Pathology report arrived.
-  day 23 Thu Sep 24 agent   read      Claude read the pathology report: malignant (Invasive ductal carcinoma, grade 2, ER+/PR+/HER2-).
-  day 23 Thu Sep 24 agent   check     Checks passed. Every quote matches the report word for word.
-  day 23 Thu Sep 24 agent   pcp       Note to the ordering PCP: pathology shows Invasive ductal carcinoma, grade 2, ER+/PR+/HER2-. Breast surgery is taking over.
-  day 23 Thu Sep 24 agent   handoff   Handed to the breast surgery team. Cancer diagnosis: Invasive ductal carcinoma, grade 2, ER+/PR+/HER2-. Her care moves to the surgery team.
+  day 23 Thu Sep 24 agent   read      The rules read the pathology report: malignant (Invasive ductal carcinoma, Nottingham grade 2).
+  day 23 Thu Sep 24 agent   check     Checks passed. The diagnosis is one the rules know.
+  day 23 Thu Sep 24 agent   compare   Claude compared the imaging and pathology reports. The right breast 10 o'clock mass is a 2.1 cm irregular, spiculated, BI-RADS 5 lesion with fine pleo
+  day 23 Thu Sep 24 agent   pcp       Note to the ordering PCP: pathology shows invasive ductal carcinoma, Nottingham grade 2. Breast surgery is taking over.
+  day 23 Thu Sep 24 agent   handoff   Handed to the breast surgery team. Cancer diagnosis: Invasive ductal carcinoma, Nottingham grade 2. Her care moves to the surgery team.
   day 23 Thu Sep 24 agent   close     Case closed. Cancer diagnosed and handed to breast surgery. The agent's loop is done.
 
 P9 Rosa D. (Unclear report. Held for a radiologist.)
   day 21 Tue Sep 22 system  doc       Screening mammogram arrived.
-  day 21 Tue Sep 22 agent   read      Claude read the screening mammogram: BI-RADS 1, both breasts. Next step: Routine screening mammogram in 1 year.
-  day 21 Tue Sep 22 agent   check     Check failed. The findings and the impression disagree: "there is a possible new 1.1 cm irregular mass with indistinct margins".
+  day 21 Tue Sep 22 agent   read      The rules read the screening mammogram: BI-RADS 1, both breasts. Next step: Routine screening mammogram in 1 year.
+  day 21 Tue Sep 22 agent   check     Check failed. The impression says negative, but the findings describe something: "In the left breast at 2 o'clock, middle depth, there is a possible n
   day 21 Tue Sep 22 agent   handoff   Handed to the radiologist. The report is unclear, so the case stops here until a radiologist looks at it.
   day 22 Wed Sep 23 person  person    Reviewed the report. The impression was entered in error. Issued an addendum.
   day 22 Wed Sep 23 system  doc       Report addendum arrived.
-  day 22 Wed Sep 23 agent   read      Claude read the report addendum: BI-RADS 0, left breast. Next step: Diagnostic mammogram and targeted ultrasound of left breast.
-  day 22 Wed Sep 23 agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day 22 Wed Sep 23 agent   read      The rules read the report addendum: BI-RADS 0, left breast. Next step: Diagnostic mammogram and targeted ultrasound of the left breast.
+  day 22 Wed Sep 23 agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day 22 Wed Sep 23 agent   note      The radiologist's correction passed the checks. The agent picks the case back up.
   day 22 Wed Sep 23 agent   pathway   Pathway: diagnostic mammogram or ultrasound, due Oct 6, 2026. Outreach starts now.
   day 22 Wed Sep 23 agent   text      Hi Rosa, this is Riverside Breast Center. Your care team would like you to come back for more imaging. You can book here: riverside.example/book. Repl
@@ -155,18 +158,18 @@ P9 Rosa D. (Unclear report. Held for a radiologist.)
   day 27 Mon Sep 28 agent   text      Reminder: your appointment at Riverside Breast Center is tomorrow, Tue Sep 29. Reply if you need a ride or a different time.
   day 28 Tue Sep 29 system  appt      Appointment done.
   day 28 Tue Sep 29 system  doc       Diagnostic mammogram and ultrasound arrived.
-  day 28 Tue Sep 29 agent   read      Claude read the diagnostic mammogram and ultrasound: BI-RADS 1, left breast. Next step: Return to annual screening.
-  day 28 Tue Sep 29 agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day 28 Tue Sep 29 agent   read      The rules read the diagnostic mammogram and ultrasound: BI-RADS 1, left breast. Next step: Return to annual screening.
+  day 28 Tue Sep 29 agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day 28 Tue Sep 29 agent   close     Case closed. Resolved as BI-RADS 1. Back to routine screening.
 
 P10 Joyce K. (Findings in both breasts: right BI-RADS 4A, left BI-RADS 3. Books the right biopsy, which is benign. The left side stays on its own six-month track.)
   day  7 Tue Sep 8  system  doc       Diagnostic mammogram and ultrasound arrived.
-  day  7 Tue Sep 8  agent   read      Claude read the diagnostic mammogram and ultrasound: BI-RADS 4A, both breasts. Next step: Ultrasound-guided core biopsy of right breast mass; left bre
-  day  7 Tue Sep 8  agent   check     Checks passed. Every quote matches the report word for word, and the findings fit the impression.
+  day  7 Tue Sep 8  agent   read      The rules read the diagnostic mammogram and ultrasound: BI-RADS 4A, both breasts. Next step: Ultrasound-guided core needle biopsy of the right breast 
+  day  7 Tue Sep 8  agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
   day  7 Tue Sep 8  agent   split     This report gives each breast its own assessment, so each breast gets its own case. This one follows the right breast (BI-RADS 4A).
   day  7 Tue Sep 8  agent   pathway   Pathway: biopsy, due Sep 22, 2026. Outreach starts now.
   day  7 Tue Sep 8  agent   pcp       Note to the ordering PCP: BI-RADS 4A, biopsy recommended. The agent is helping her schedule it.
-  day  7 Tue Sep 8  agent   split     Following the left breast on its own: BI-RADS 3, left breast. Next step: Follow-up ultrasound in 6 months.
+  day  7 Tue Sep 8  agent   split     Following the left breast on its own: BI-RADS 3, left breast. Next step: Follow-up ultrasound of the left breast in 6 months.
   day  7 Tue Sep 8  agent   pathway   Pathway: 6-month follow-up imaging, due Mar 8, 2027. Reminders start Feb 8, 2027.
   day  7 Tue Sep 8  agent   text      Hi Joyce, this is Riverside Breast Center. Your care team asked us to help you schedule the appointment they discussed with you for your right breast.
   day  8 Wed Sep 9  patient reply     Got it. I booked the biopsy for Tuesday the 15th.
@@ -177,15 +180,55 @@ P10 Joyce K. (Findings in both breasts: right BI-RADS 4A, left BI-RADS 3. Books 
   day 14 Tue Sep 15 system  appt      Biopsy done.
   day 14 Tue Sep 15 agent   pathway   Watching for the pathology result, due Sep 25, 2026. The agent never gives results to the patient.
   day 17 Fri Sep 18 system  doc       Pathology report arrived.
-  day 17 Fri Sep 18 agent   read      Claude read the pathology report: benign (Fibroadenoma, negative for atypia and malignancy).
-  day 17 Fri Sep 18 agent   check     Checks passed. Every quote matches the report word for word.
-  day 17 Fri Sep 18 agent   handoff   Handed to the radiologist. Benign result (Fibroadenoma, negative for atypia and malignancy). A person confirms it matches the imaging before the case 
+  day 17 Fri Sep 18 agent   read      The rules read the pathology report: benign (Fibroadenoma, negative for atypia and malignancy).
+  day 17 Fri Sep 18 agent   check     Checks passed. The diagnosis is one the rules know.
+  day 17 Fri Sep 18 agent   compare   Claude compared the imaging and pathology reports. The biopsied right breast 10 o'clock mass (1.2 cm, oval, indistinct margins, BI-RADS 4A) was a fibr
+  day 17 Fri Sep 18 agent   flag      Possible mismatch: The mass has indistinct margins, which is a suspicious feature, and it is new in a 68-year-old woman. A fibroadenoma may not fully 
+  day 17 Fri Sep 18 agent   handoff   Handed to the radiologist. Benign result: fibroadenoma, negative for atypia and malignancy. It may not match the imaging. The mass has indistinct marg
   day 18 Sat Sep 19 person  person    Fibroadenoma matches the right breast imaging. Concordant.
   day 18 Sat Sep 19 agent   close     Case closed for the right breast. Benign and concordant. Back to annual screening.
   day 18 Sat Sep 19 agent   note      The left breast is still open: 6-month follow-up imaging, due Mar 8, 2027. The agent keeps following it.
 
+P11 Evelyn B. (BI-RADS 4C. Her biopsy comes back benign, but the result doesn't explain a spiculated mass. The radiologist calls it a mismatch, and the agent follows her to a repeat biopsy, which finds cancer.)
+  day 34 Mon Oct 5  system  doc       Diagnostic mammogram and ultrasound arrived.
+  day 34 Mon Oct 5  agent   read      The rules read the diagnostic mammogram and ultrasound: BI-RADS 4C, left breast. Next step: Ultrasound-guided core needle biopsy of the left breast ma
+  day 34 Mon Oct 5  agent   check     Checks passed. One clear BI-RADS category, a valid exam date, and findings that fit the impression.
+  day 34 Mon Oct 5  agent   pathway   Pathway: biopsy, due Oct 19, 2026. Outreach starts now.
+  day 34 Mon Oct 5  agent   pcp       Note to the ordering PCP: BI-RADS 4C, biopsy recommended. The agent is helping her schedule it.
+  day 34 Mon Oct 5  agent   text      Hi Evelyn, this is Riverside Breast Center. Your care team asked us to help you schedule the appointment they discussed with you. You can book here: r
+  day 35 Tue Oct 6  agent   booked    Checked the schedule: biopsy booked for Fri Oct 9, 2026.
+  day 37 Thu Oct 8  agent   text      Reminder: your appointment at Riverside Breast Center is tomorrow, Fri Oct 9. Reply if you need a ride or a different time.
+  day 38 Fri Oct 9  system  appt      Biopsy done.
+  day 38 Fri Oct 9  agent   pathway   Watching for the pathology result, due Oct 19, 2026. The agent never gives results to the patient.
+  day 41 Mon Oct 12 system  doc       Pathology report arrived.
+  day 41 Mon Oct 12 agent   read      The rules read the pathology report: benign (Benign breast tissue with fibrocystic changes and stromal fibrosis, negative for atypia and malignancy).
+  day 41 Mon Oct 12 agent   check     Checks passed. The diagnosis is one the rules know.
+  day 41 Mon Oct 12 agent   compare   Claude compared the imaging and pathology reports. Left breast 2 o'clock biopsy site matches the location of a new 1.3 cm irregular, spiculated mass w
+  day 41 Mon Oct 12 agent   flag      Possible mismatch: A nonspecific benign result (fibrocystic changes and stromal fibrosis) does not clearly explain a highly suspicious irregular, spic
+  day 41 Mon Oct 12 agent   flag      Possible mismatch: The finding is BI-RADS 4C (high suspicion for malignancy), but the biopsy shows no malignancy, which raises the possibility of samp
+  day 41 Mon Oct 12 agent   handoff   Handed to the radiologist. Benign result: benign breast tissue with fibrocystic changes and stromal fibrosis, negative for atypia and malignancy. It m
+  day 42 Tue Oct 13 person  person    Not concordant. Fibrocystic change doesn't explain a spiculated mass with distortion, so the needle may have missed it. Recommend a repeat biopsy. Sen
+  day 42 Tue Oct 13 agent   pcp       Note to the ordering PCP: the radiologist found that the benign biopsy result doesn't match the imaging and recommends a repeat biopsy. The agent is h
+  day 42 Tue Oct 13 agent   pathway   Pathway: repeat biopsy, due Oct 27, 2026. Outreach starts now.
+  day 42 Tue Oct 13 agent   text      Hi Evelyn, this is Riverside Breast Center. Your care team asked us to help you schedule the appointment they discussed with you. You can book here: r
+  day 43 Wed Oct 14 patient reply     My doctor's office called and said the biopsy was benign. Why would I need another one?
+  day 43 Wed Oct 14 agent   readreply Claude read her reply: She says her doctor's office told her the biopsy was benign and asks why she needs another one. Labels: medical_question.
+  day 43 Wed Oct 14 agent   handoff   Handed to the nurse navigator. She asked a medical question. A person takes it from here.
+  day 44 Thu Oct 15 person  person    Called her. Her doctor's office had told her the biopsy was benign, so she thought she was done. Explained that the radiologist needs more tissue beca
+  day 44 Thu Oct 15 agent   booked    Checked the schedule: biopsy booked for Tue Oct 20, 2026, booked with the navigator.
+  day 48 Mon Oct 19 agent   text      Reminder: your appointment at Riverside Breast Center is tomorrow, Tue Oct 20. Reply if you need a ride or a different time.
+  day 49 Tue Oct 20 system  appt      Biopsy done.
+  day 49 Tue Oct 20 agent   pathway   Watching for the pathology result, due Oct 30, 2026. The agent never gives results to the patient.
+  day 52 Fri Oct 23 system  doc       Pathology report, repeat biopsy arrived.
+  day 52 Fri Oct 23 agent   read      The rules read the pathology report, repeat biopsy: malignant (Invasive lobular carcinoma, classic type, Nottingham grade 2).
+  day 52 Fri Oct 23 agent   check     Checks passed. The diagnosis is one the rules know.
+  day 52 Fri Oct 23 agent   compare   Claude compared the imaging and pathology reports. A 1.3 cm irregular, spiculated left breast mass at 2 o'clock with architectural distortion (BI-RADS
+  day 52 Fri Oct 23 agent   pcp       Note to the ordering PCP: pathology shows invasive lobular carcinoma, classic type, Nottingham grade 2. Breast surgery is taking over.
+  day 52 Fri Oct 23 agent   handoff   Handed to the breast surgery team. Cancer diagnosis: Invasive lobular carcinoma, classic type, Nottingham grade 2. Her care moves to the surgery team.
+  day 52 Fri Oct 23 agent   close     Case closed. Cancer diagnosed and handed to breast surgery. The agent's loop is done.
+
 End of simulation (Nov 30, 2026)
-  statuses: P1=done P2=done P3=done P4=done P5=done P6=overdue P7=done P8=done P9=done P10=agent
-  abnormal results resolved within 60 days: 7 of 7 | days: 5, 7, 8, 9, 11, 11, 11 | median: 9
-  needed a person: P4, P6, P7, P9
-  agent texts/portal/calls: 20/3/2 | replies read: 8
+  statuses: P1=done P2=done P3=done P4=done P5=done P6=overdue P7=done P8=done P9=done P10=agent P11=done
+  abnormal results resolved within 60 days: 8 of 8 | days: 5, 7, 8, 9, 11, 11, 11, 18 | median: 10
+  needed a person: P4, P6, P7, P9, P11
+  agent texts/portal/calls: 24/3/2 | replies read: 9

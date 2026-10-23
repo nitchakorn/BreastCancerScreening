@@ -4,10 +4,11 @@
   const STATES = { queued: 'Queued', reading: 'Reading report', read_failed: 'Read failed · retry', needs_review: 'Needs a person', closed: 'Closed',
     awaiting_booking: 'Waiting for booking', waiting_reminder: 'Reminder scheduled', booked: 'Booked', awaiting_result: 'Waiting for result' };
   const KINDS = { report_saved: 'Report saved', reply_saved: 'Reply saved', reader_requested: 'Read requested', read_completed: 'Read returned', read_failed: 'Read failed',
-    read_retried: 'Retried', read_recovered: 'Recovered after restart', doc: 'Report arrived', read: 'Claude read it', validation_passed: 'Checks passed',
+    read_retried: 'Retried', read_recovered: 'Recovered after restart', doc: 'Report arrived', read: 'Rules read it', validation_passed: 'Checks passed',
     validation_held: 'Checks failed', pathway: 'Pathway', text: 'Text', portal: 'Portal message', call: 'Automated call', reply: 'Her reply',
     readreply: 'Claude read her reply', note: 'Note', booked: 'Schedule checked', appt: 'Appointment', handoff: 'Handed to a person',
-    headsup: 'Heads-up', pcp: 'Note to the PCP', overdue: 'Overdue', close: 'Case closed', person: 'A person acted', after_close: 'After closing' };
+    headsup: 'Heads-up', pcp: 'Note to the PCP', overdue: 'Overdue', close: 'Case closed', person: 'A person acted', after_close: 'After closing',
+    compare: 'Imaging and pathology compared', flag: 'Possible mismatch', split: 'Split by breast' };
   const CHANNELS = { text: 'Text', portal: 'Portal message', call: 'Automated call' };
   const LABELS = { booked: 'Says she booked', wants_new_time: 'Wants another time', transport_barrier: 'No ride', other_barrier: 'Other barrier',
     scared_or_worried: 'Scared or worried', medical_question: 'Medical question', declines_care: 'Declines care', wrong_number: 'Wrong number', other: 'Other' };
@@ -157,16 +158,40 @@
     $('person-reason').textContent = open.reason;
     $('resume').hidden = !(a && a.can.resume);
     $('concordant').hidden = open.kind !== 'concordance';
-    $('person-hint').textContent = open.kind === 'hold' ? 'Add the corrected report under Reports. If it passes the checks, the agent picks the case back up.'
+    $('discordant').hidden = open.kind !== 'concordance';
+    $('person-hint').textContent = open.kind === 'concordance' ? 'If it doesn’t match, the agent tells her doctor and follows her to a repeat biopsy.'
+      : open.kind === 'hold' ? 'Add the corrected report under Reports. If it passes the checks, the agent picks the case back up.'
       : open.kind === 'exception' ? (a && a.can.book ? 'The navigator can book her under Test schedule.' : 'Add the missing report under Reports, or close the case.') : '';
     $('close-form').dataset.review = open.id;
     $('resume').dataset.review = open.id;
     $('concordant').dataset.review = open.id;
+    $('discordant').dataset.review = open.id;
+  }
+  // Claude's side-by-side summary of the latest biopsy result and the imaging, with what it flagged.
+  function renderComparison(item) {
+    const box = $('comparison'); box.replaceChildren();
+    const e = [...item.events].reverse().find(x => x.kind === 'compare');
+    box.hidden = !e;
+    if (!e) return;
+    const x = e.meta && e.meta.comparison;
+    box.append(element('p', 'Imaging and pathology, side by side', 'eyebrow'));
+    if (!x) { box.append(element('p', e.detail, 'muted small')); return; }
+    const table = element('table'), head = element('tr');
+    head.append(element('th', ''), element('th', 'Imaging'), element('th', 'Pathology'));
+    const thead = element('thead'); thead.append(head);
+    const tbody = element('tbody'), im = x.imaging || {}, path = item.read && item.read.doc_type === 'pathology' ? item.read : null;
+    for (const [label, a, b] of [['Breast', im.side, path && path.side], ['Finding', [im.size, im.margins].filter(Boolean).join(', '), x.pathology && x.pathology.diagnosis], ['BI-RADS', im.birads, '']]) {
+      const tr = element('tr'); tr.append(element('th', label), element('td', a || ''), element('td', b || '')); tbody.append(tr);
+    }
+    table.append(thead, tbody);
+    box.append(table, element('p', x.match === 'concordant' ? 'Claude’s call: the result fits the imaging.' : x.match === 'possible_mismatch' ? 'Claude’s call: possible mismatch. The radiologist decides.' : 'Claude’s call: not enough to compare. The radiologist decides.', x.match === 'concordant' ? 'ok small' : 'error'));
+    if (x.flags && x.flags.length) { const ul = element('ul', undefined, 'problem-list'); x.flags.forEach(f => ul.append(element('li', f.concern))); box.append(ul); }
+    box.append(element('p', x.summary, 'muted small'));
   }
   function renderComing(item) {
     const list = $('coming'); list.replaceChildren();
     const coming = item.agent ? item.agent.coming : [];
-    if (!item.agent) list.append(element('li', 'Claude reads the report first.', 'muted note'));
+    if (!item.agent) list.append(element('li', 'The rules read the report first.', 'muted note'));
     else if (item.status === 'closed') list.append(element('li', 'Nothing. The case is closed.', 'muted note'));
     else if (!coming.length) list.append(element('li', 'Nothing scheduled.', 'muted note'));
     for (const c of coming) { const li = element('li'); li.append(element('time', fmtDay(c.date)), element('span', c.what)); list.append(li); }
@@ -212,20 +237,20 @@
       const head = element('div', undefined, 'report-head');
       head.append(element('b', (r.read && TITLES[r.read.doc_type]) || (i ? 'Next report' : 'First report')), element('span', when(r.createdAt), 'muted small'));
       card.append(head);
-      if (r.status === 'queued' || r.status === 'reading') card.append(element('p', 'Claude is reading this report…', 'muted'));
+      if (r.status === 'queued' || r.status === 'reading') card.append(element('p', 'Reading this report…', 'muted'));
       else if (r.status === 'read_failed') {
         card.append(element('p', r.problems[0] || 'The read failed.', 'error'));
         const retry = element('button', 'Retry report read', 'secondary compact'); retry.type = 'button'; retry.addEventListener('click', retryReads); card.append(retry);
       } else {
         card.append(element('p', summaryOf(r.read)));
         if (r.problems.length) { const ul = element('ul', undefined, 'problem-list'); r.problems.forEach(p => ul.append(element('li', p))); card.append(ul); }
-        else card.append(element('p', 'Checks passed: every quote matches the report word for word.', 'ok small'));
+        else card.append(element('p', r.read && r.read.reader === 'rules' ? 'Checks passed: the rules read this report cleanly.' : 'Checks passed: every quote matches the report word for word.', 'ok small'));
       }
       const source = element('details'), pre = element('pre');
       const quotes = r.read && r.read.quotes ? Object.values(r.read.quotes) : [];
       pre.append(highlight(r.text, r.read && r.read.mismatch_quote ? [...quotes, r.read.mismatch_quote] : quotes, r.read && r.read.mismatch_quote));
       source.append(element('summary', 'Report and quoted evidence'), pre);
-      const raw = element('details'); raw.append(element('summary', 'Claude’s structured read'), element('pre', r.read ? JSON.stringify(r.read, null, 2) : 'No completed read yet.'));
+      const raw = element('details'); raw.append(element('summary', 'The structured read'), element('pre', r.read ? JSON.stringify(r.read, null, 2) : 'No completed read yet.'));
       card.append(source, raw);
       box.append(card);
     });
@@ -253,14 +278,14 @@
       : item.status === 'closed' ? 'Nothing to book. The case is closed.' : 'Nothing to book right now.';
     const pending = [...item.reports, ...item.replies].filter(i => i.status === 'queued' || i.status === 'reading').length;
     $('inputs-pending').hidden = !pending || !item.agent;
-    $('inputs-pending').textContent = pending ? `Claude is reading ${plural(pending, 'new item', 'new items')}…` : '';
+    $('inputs-pending').textContent = pending ? `Reading ${plural(pending, 'new item', 'new items')}…` : '';
   }
   function renderCase(item) {
     current = item;
     $('detail-empty').hidden = true; $('detail').hidden = false;
     $('detail-title').textContent = item.patient + (item.side && item.side !== 'both' ? ` · ${breast(item.side)}` : '');
     $('case-state').replaceWith(Object.assign(badge(item.status), { id: 'case-state' }));
-    renderFacts(item); renderTracks(item); renderPerson(item); renderComing(item); renderThread(item); renderReports(item); renderTimeline(item); renderForms(item);
+    renderFacts(item); renderTracks(item); renderPerson(item); renderComparison(item); renderComing(item); renderThread(item); renderReports(item); renderTimeline(item); renderForms(item);
   }
 
   /* ---------- loading ---------- */
@@ -315,13 +340,13 @@
       renderClock(health.clock);
       $('connection').classList.toggle('warning', health.runtime !== 'browser' && (!health.reader.configured || health.reader.mode === 'recorded'));
       $('connection').textContent = health.runtime === 'browser'
-        ? 'This demo runs in your browser with Claude’s recorded reads of the sample reports and replies. Pick samples to run the whole loop. To have Claude read new text live, run the workspace on your computer.'
+        ? 'This demo runs in your browser. Rules read any report you give it. Claude’s reads of the sample replies and its comparisons of the sample biopsy results were recorded earlier. To have Claude read new replies live, run the workspace on your computer.'
         : health.reader.mode === 'claude-code'
-        ? `Live mode through Claude Code on this computer. Claude reads every new report and reply with your Claude Code sign-in (${health.reader.model}). All messages go to the local test inbox.`
+        ? `Live mode through Claude Code on this computer. Rules read every report. Claude reads every reply and compares each biopsy result with the imaging, with your Claude Code sign-in (${health.reader.model}). All messages go to the local test inbox.`
         : health.reader.mode === 'recorded'
-        ? 'Recorded mode · no API calls. Claude’s reads of the bundled sample reports and replies were recorded earlier. Pick samples to run the whole loop. New text needs live mode.'
+        ? 'Recorded mode · no API calls. Rules read any report. Claude’s reads of the sample replies and its comparisons of the sample biopsy results were recorded earlier. A new reply needs live mode.'
         : health.reader.configured
-        ? `Live mode. Claude reads every report and reply with ${health.reader.model}. All messages go to the local test inbox.`
+        ? `Live mode. Rules read every report. Claude reads every reply and compares each biopsy result with the imaging, with ${health.reader.model}. All messages go to the local test inbox.`
         : 'Live reading needs an Anthropic API key. Add ANTHROPIC_API_KEY in your local .env file, then restart the server. You can save a report now and retry its read later.';
       if (!selected && data.cases.length) select(data.cases[0].id, true);
       const listSignature = JSON.stringify([selected, data.cases]);
@@ -397,7 +422,7 @@
     event.preventDefault();
     act(async () => { await post(`/api/cases/${selected}/reports`, { report: $('next-text').value }); $('next-text').value = ''; $('next-example').value = ''; }, 'next-error', $('next-send'));
   });
-  for (const [id, action] of [['resume', 'resume'], ['concordant', 'concordant']]) {
+  for (const [id, action] of [['resume', 'resume'], ['concordant', 'concordant'], ['discordant', 'discordant']]) {
     $(id).addEventListener('click', () => act(() => post(`/api/cases/${selected}/reviews/${$(id).dataset.review}`, { action }), 'person-error', $(id)));
   }
   $('close-form').addEventListener('submit', event => {

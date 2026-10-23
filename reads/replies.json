@@ -55,5 +55,12 @@
     ],
     "quote": "I booked the biopsy for Tuesday the 15th",
     "summary": "She says she has booked her biopsy for Tuesday the 15th."
+  },
+  "P11-r1": {
+    "labels": [
+      "medical_question"
+    ],
+    "quote": "Why would I need another one?",
+    "summary": "She says her doctor's office told her the biopsy was benign and asks why she needs another one."
   }
 }

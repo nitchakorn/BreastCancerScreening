@@ -15,6 +15,9 @@ function validDate(value) {
 function checkReport(text, read, now) {
   const problems = [];
   if (!read || typeof read !== 'object' || Array.isArray(read)) return ['No usable structured report was returned.'];
+  // The rules say when a report doesn't fit them. Each reason sends the case to a radiologist.
+  if (Array.isArray(read.unclear)) for (const reason of read.unclear) problems.push(reason);
+  if (read.unclear && read.unclear.length) return [...new Set(problems)];
   if (!DOC_TYPES.includes(read.doc_type)) problems.push('Document type is missing or unsupported.');
   if (!validDate(read.exam_date)) problems.push('A valid exam or procedure date is required.');
   else if (read.exam_date > now) problems.push('The exam date is in the future and requires review.');
@@ -67,7 +70,7 @@ function checkReport(text, read, now) {
       }
     }
   }
-  return problems;
+  return [...new Set(problems)];
 }
 
 // What the engine needs to know about a report.

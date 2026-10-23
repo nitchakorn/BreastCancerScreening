@@ -1,0 +1,140 @@
+{
+  "P7-path": {
+    "imaging": "P7-dx",
+    "comparison": {
+      "imaging": {
+        "side": "left",
+        "size": "1.6 cm",
+        "margins": "partly indistinct",
+        "birads": "4B",
+        "quotes": {
+          "size": "1.6 cm oval hypoechoic mass",
+          "margins": "partly indistinct margins",
+          "birads": "BI-RADS 4B: Moderate suspicion for malignancy"
+        }
+      },
+      "pathology": {
+        "diagnosis": "Fibroadenoma, negative for atypia and malignancy",
+        "quote": "Fibroadenoma. Negative for atypia and malignancy."
+      },
+      "match": "possible_mismatch",
+      "flags": [
+        {
+          "concern": "The mass has partly indistinct margins and internal vascularity and was rated BI-RADS 4B, which is less typical of a fibroadenoma than a circumscribed oval mass would be, so the benign result may not fully explain the finding.",
+          "imaging_quote": "partly indistinct margins and internal vascularity",
+          "pathology_quote": "Fibroadenoma. Negative for atypia and malignancy."
+        }
+      ],
+      "summary": "A 1.6 cm oval left breast mass at 1 o'clock with partly indistinct margins, rated BI-RADS 4B, was biopsied and showed fibroadenoma, negative for atypia and malignancy. Side and location agree between the reports. A fibroadenoma is a specific benign diagnosis and fits an oval mass, but the partly indistinct margins and moderate suspicion rating leave some doubt, so the radiologist should decide whether it explains the finding."
+    }
+  },
+  "P8-path": {
+    "imaging": "P8-dx",
+    "comparison": {
+      "imaging": {
+        "side": "right",
+        "size": "2.1 cm",
+        "margins": "spiculated",
+        "birads": "5",
+        "quotes": {
+          "size": "2.1 cm irregular mass",
+          "margins": "spiculated margins",
+          "birads": "BI-RADS 5: Highly suggestive of malignancy"
+        }
+      },
+      "pathology": {
+        "diagnosis": "Invasive ductal carcinoma, Nottingham grade 2, ER positive, PR positive, HER2 negative",
+        "quote": "Invasive ductal carcinoma, Nottingham grade 2."
+      },
+      "match": "concordant",
+      "flags": [],
+      "summary": "The right breast 10 o'clock mass is a 2.1 cm irregular, spiculated, BI-RADS 5 lesion with fine pleomorphic calcifications. Core biopsy from the right breast at 10 o'clock shows invasive ductal carcinoma, grade 2, ER and PR positive, HER2 negative. Malignancy in a highly suspicious finding is concordant, and side and location agree between the reports. Final concordance decision rests with the radiologist."
+    }
+  },
+  "P10-path": {
+    "imaging": "P10-dx",
+    "comparison": {
+      "imaging": {
+        "side": "right",
+        "size": "1.2 cm",
+        "margins": "oval hypoechoic mass with indistinct margins, new since the prior exam",
+        "birads": "4A",
+        "quotes": {
+          "size": "1.2 cm",
+          "margins": "indistinct margins",
+          "birads": "BI-RADS 4A"
+        }
+      },
+      "pathology": {
+        "diagnosis": "Fibroadenoma, with no atypia and no malignancy",
+        "quote": "Fibroadenoma. Negative for atypia and malignancy."
+      },
+      "match": "possible_mismatch",
+      "flags": [
+        {
+          "concern": "The mass has indistinct margins, which is a suspicious feature, and it is new in a 68-year-old woman. A fibroadenoma may not fully explain that appearance, so the radiologist should decide whether the result fits.",
+          "imaging_quote": "oval hypoechoic mass with indistinct margins, new since the prior exam",
+          "pathology_quote": "Fibroadenoma. Negative for atypia and malignancy."
+        }
+      ],
+      "summary": "The biopsied right breast 10 o'clock mass (1.2 cm, oval, indistinct margins, BI-RADS 4A) was a fibroadenoma with no atypia or malignancy. The side and location match between the reports. The benign diagnosis fits the oval shape, but the indistinct margins and the fact that the mass is new in a 68-year-old woman may not be fully explained, so concordance is left to the radiologist. The left breast BI-RADS 3 mass was not biopsied."
+    }
+  },
+  "P11-path": {
+    "imaging": "P11-dx",
+    "comparison": {
+      "imaging": {
+        "side": "left",
+        "size": "1.3 cm",
+        "margins": "spiculated margins, irregular shape, angular margins on ultrasound, with architectural distortion",
+        "birads": "4C",
+        "quotes": {
+          "size": "1.3 cm irregular mass",
+          "margins": "spiculated margins",
+          "birads": "BI-RADS 4C: High suspicion for malignancy"
+        }
+      },
+      "pathology": {
+        "diagnosis": "Benign breast tissue with fibrocystic changes and stromal fibrosis, negative for atypia and malignancy",
+        "quote": "Benign breast tissue with fibrocystic changes and stromal fibrosis. Negative for atypia and malignancy."
+      },
+      "match": "possible_mismatch",
+      "flags": [
+        {
+          "concern": "A nonspecific benign result (fibrocystic changes and stromal fibrosis) does not clearly explain a highly suspicious irregular, spiculated mass with architectural distortion.",
+          "imaging_quote": "irregular mass with spiculated margins and associated architectural distortion",
+          "pathology_quote": "Benign breast tissue with fibrocystic changes and stromal fibrosis."
+        },
+        {
+          "concern": "The finding is BI-RADS 4C (high suspicion for malignancy), but the biopsy shows no malignancy, which raises the possibility of sampling error or a missed target.",
+          "imaging_quote": "BI-RADS 4C: High suspicion for malignancy",
+          "pathology_quote": "Negative for atypia and malignancy."
+        }
+      ],
+      "summary": "Left breast 2 o'clock biopsy site matches the location of a new 1.3 cm irregular, spiculated mass with architectural distortion, rated BI-RADS 4C. Pathology shows nonspecific benign fibrocystic changes and stromal fibrosis, which may not explain this highly suspicious finding. The radiologist should decide whether this is concordant or whether the sampling needs review."
+    }
+  },
+  "P11-path2": {
+    "imaging": "P11-dx",
+    "comparison": {
+      "imaging": {
+        "side": "left",
+        "size": "1.3 cm",
+        "margins": "spiculated margins, irregular shape, with architectural distortion; angular margins on ultrasound",
+        "birads": "4C",
+        "quotes": {
+          "size": "1.3 cm irregular mass",
+          "margins": "spiculated margins",
+          "birads": "BI-RADS 4C: High suspicion for malignancy"
+        }
+      },
+      "pathology": {
+        "diagnosis": "Invasive lobular carcinoma, classic type, Nottingham grade 2, ER positive, PR positive, HER2 negative",
+        "quote": "Invasive lobular carcinoma, classic type, Nottingham grade 2."
+      },
+      "match": "concordant",
+      "flags": [],
+      "summary": "A 1.3 cm irregular, spiculated left breast mass at 2 o'clock with architectural distortion (BI-RADS 4C) was biopsied. Pathology from the left breast at 2 o'clock shows invasive lobular carcinoma, which is a malignant diagnosis that fits a highly suspicious finding. Side and location agree between the reports. The pathology specimen is labeled as a repeat biopsy, and no earlier biopsy result is included here."
+    }
+  }
+}

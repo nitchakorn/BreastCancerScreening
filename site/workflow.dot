@@ -1,12 +1,12 @@
 digraph Workflow {
-  graph [rankdir=TB, bgcolor="#f7fafc", pad=0.4, nodesep=0.35, ranksep=0.6, fontname="Helvetica", fontsize=24, labelloc=t, label="Breast Screening Follow-up Agent\nClaude reads · Code decides · People handle exceptions"];
+  graph [rankdir=TB, bgcolor="#f7fafc", pad=0.4, nodesep=0.35, ranksep=0.6, fontname="Helvetica", fontsize=24, labelloc=t, label="Breast Screening Follow-up Agent\nRules read and decide · Claude helps with judgment · People make the clinical calls"];
   node [shape=box, style="rounded,filled", fillcolor="#d9f2ee", color="#319a8c", fontcolor="#163449", fontname="Helvetica", fontsize=12, margin="0.15,0.12"];
   edge [color="#607b8c", fontname="Helvetica", fontsize=10, arrowsize=0.7];
   subgraph cluster_report {
     label="1 · Report and pathway"; fontsize=18; color="#bad4df"; style=rounded;
     arrival [label="New imaging report / addendum"];
-    read [label="Claude extracts BI-RADS, exam date,\nrecommendation and exact quotes", fillcolor="#dceafb", color="#5687c5"];
-    checks [shape=diamond, label="Code checks pass?\nQuotes match; category present;\nfindings agree with impression"];
+    read [label="Rules read BI-RADS, exam date, breast\nand recommendation, with exact words\n(each breast on its own when assessed separately)"];
+    checks [shape=diamond, label="Read cleanly?\nOne category per breast; valid date;\nfindings agree with impression"];
     review [label="Radiologist review\nHold until corrected report", fillcolor="#ffedc2", color="#cc9a37"];
     category [shape=diamond, label="BI-RADS?"];
     routine [label="1–2: Close case\nRoutine screening", fillcolor="#e0efce", color="#7b9e4c"];
@@ -65,13 +65,15 @@ digraph Workflow {
     wait [label="Watch for pathology\nDue 10 days after biopsy"];
     received [shape=diamond, label="Result received?"];
     missing [label="If missing at day 10:\nNavigator investigates", fillcolor="#ffedc2", color="#cc9a37"];
-    pathread [label="Claude extracts result,\ndiagnosis and quotes", fillcolor="#dceafb", color="#5687c5"];
-    pathcheck [shape=diamond, label="Code checks pass?"];
+    pathread [label="Rules read the diagnosis:\ncancer, atypia, benign or nondiagnostic"];
+    pathcheck [shape=diamond, label="Read cleanly?"];
+    compare [label="Claude compares pathology with imaging\nSide-by-side summary; flags possible mismatch\nCode checks every quote", fillcolor="#dceafb", color="#5687c5"];
     pathreview [label="Radiologist review / correction", fillcolor="#ffedc2", color="#cc9a37"];
     result [shape=diamond, label="Pathology result?"];
     malignant [label="Malignant: notify PCP\nHand off to breast surgery", fillcolor="#ffedc2", color="#cc9a37"];
     done [label="Close agent's follow-up loop", fillcolor="#e0efce", color="#7b9e4c"];
-    benign [label="Benign: radiologist confirms\nmatch with imaging", fillcolor="#ffedc2", color="#cc9a37"];
+    benign [label="Benign: radiologist decides\nwhether it matches the imaging", fillcolor="#ffedc2", color="#cc9a37"];
+    repeat [label="Doesn't match: notify PCP\nRepeat biopsy due in 14 days\nAgent restarts outreach"];
     resolved [label="If concordant: close case\nReturn to annual screening", fillcolor="#e0efce", color="#7b9e4c"];
     other [label="Atypia / nondiagnostic / other:\nRadiologist decides next step", fillcolor="#ffedc2", color="#cc9a37"];
     wait -> received;
@@ -81,14 +83,17 @@ digraph Workflow {
     pathread -> pathcheck;
     pathcheck -> pathreview [label="No"];
     pathreview -> pathread [label="Correction", constraint=false];
-    pathcheck -> result [label="Yes"];
+    pathcheck -> compare [label="Yes"];
+    compare -> result;
     result -> malignant [label="Malignant"];
     malignant -> done;
     result -> benign [label="Benign"];
-    benign -> resolved [label="Concordance confirmed"];
+    benign -> resolved [label="Matches"];
+    benign -> repeat [label="Doesn't match"];
     result -> other [label="Other"];
   }
   appt -> wait [label="Biopsy"];
+  repeat -> outreach [label="Book repeat biopsy", constraint=false];
   navigator -> wait [style=invis];
   support -> wait [style=invis];
   saysbooked -> wait [style=invis];

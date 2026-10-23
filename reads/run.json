@@ -16,6 +16,22 @@
       "total_cost_usd": 0.051,
       "model": "claude-sonnet-5-5",
       "note": "Joyce K. (P10), the patient with findings in both breasts"
+    },
+    {
+      "date": "2026-10-23",
+      "ids": [
+        "P11-r1",
+        "P7-path",
+        "P8-path",
+        "P10-path",
+        "P11-path",
+        "P11-path2"
+      ],
+      "calls": 6,
+      "total_cost_usd": 0.106,
+      "model": "claude-sonnet-5-5",
+      "median_seconds": 5.2,
+      "note": "Evelyn B.'s reply (P11), and the radiology-pathology comparison for every biopsy"
     }
   ]
 }

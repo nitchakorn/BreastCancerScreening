@@ -373,3 +373,45 @@ test('a single-side report shows the breast named in its own recommendation', as
   assert.equal(item.side, 'right', 'the recommendation names the right breast');
   assert.equal(item.tracks.length, 0);
 });
+
+test('a benign biopsy that may not match: Claude flags it, the radiologist calls it, and the agent follows her to a repeat biopsy', async t => {
+  const w = await workspace(t);
+  const id = await w.start('Evelyn B.', 'P11-dx');
+  await w.book(id, 3);
+  await w.forward(3);
+  let item = await w.next(id, 'P11-path');
+  assert.equal(item.status, 'needs_review');
+  const review = item.reviews.find(r => r.status === 'open');
+  assert.equal(review.kind, 'concordance');
+  assert.match(review.reason, /may not match the imaging/);
+  assert(item.events.some(e => e.kind === 'compare' && /Claude compared the imaging and pathology reports/.test(e.detail)));
+  assert(item.events.filter(e => e.kind === 'flag').length >= 1);
+  const sent = item.messages.length;
+  const called = await w.act(id, 'concordance', 'discordant', 'Not concordant. Recommend a repeat biopsy.');
+  assert.equal(called.status, 200);
+  item = called.body.case;
+  assert.equal(item.status, 'awaiting_booking');
+  assert.equal(item.agent.step, 'Repeat biopsy');
+  assert.equal(item.reviews.find(r => r.kind === 'concordance').resolution, 'Not a match: repeat biopsy');
+  assert.equal(item.messages.length, sent + 1, 'a new booking text');
+  assert(item.messages.every(m => !/benign|patholog|carcinoma|mismatch/i.test(m.body)), 'the agent never gives her a result');
+  item = await w.reply(id, reply('P11-r1'));
+  assert.equal(item.reviews.find(r => r.status === 'open').kind, 'exception', 'her question goes to the navigator');
+  assert.equal((await w.book(id, 5, 'navigator')).status, 200);
+  await w.forward(5);
+  item = await w.next(id, 'P11-path2');
+  assert.equal(item.status, 'closed');
+  assert.match(item.agent.outcome, /handed to breast surgery/);
+  assert.equal(item.agent.resolvedDays, 8);
+});
+
+test('a pathology report with no recorded comparison still goes to the radiologist, who sees why', async t => {
+  const w = await workspace(t);
+  const id = await w.start('Priya S.', 'P7-dx');
+  await w.book(id, 3);
+  await w.forward(3);
+  const item = await w.next(id, 'P11-path');
+  assert.equal(item.reviews.find(r => r.status === 'open').kind, 'concordance');
+  assert(item.events.some(e => e.kind === 'compare' && /isn’t available|isn't available/.test(e.detail)));
+  assert(!item.events.some(e => e.kind === 'flag'));
+});

@@ -75,6 +75,12 @@ footer { margin-top:30px; padding-top:20px; border-top:1px solid var(--line); co
 .tracks { margin-top:16px; padding:12px 14px; border:1px solid var(--line); border-radius:9px; display:grid; gap:8px; }
 .track { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font-size:14px; }
 .track span:first-child { flex:1 1 220px; }
+.comparison { margin-top:16px; padding:12px 14px; border:1px solid var(--line); border-radius:9px; display:grid; gap:8px; font-size:14px; }
+.comparison table { width:100%; border-collapse:collapse; }
+.comparison th, .comparison td { text-align:left; vertical-align:top; padding:4px 8px 4px 0; border-bottom:1px solid var(--line); }
+.comparison thead th, .comparison tbody th { color:var(--muted); font-weight:500; }
+.comparison tbody th { white-space:nowrap; }
+.comparison p { margin:0; }
 /* demo clock */
 .clock { display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:14px 24px; margin-bottom:22px; padding:18px 24px; }
 .clock-date { font-size:22px; font-weight:700; letter-spacing:-.02em; margin:2px 0 4px; }

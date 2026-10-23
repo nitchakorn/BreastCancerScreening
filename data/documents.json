@@ -44,7 +44,7 @@
     "text": "EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound.\nDATE: 09/14/2026\nINDICATION: 44-year-old woman with a new lump in the left breast, found by the patient.\nFINDINGS: At the site of the lump, left breast 1 o'clock, 5 cm from the nipple, there is a 1.6 cm oval hypoechoic mass with partly indistinct margins and internal vascularity.\nIMPRESSION: Suspicious left breast mass. BI-RADS 4B: Moderate suspicion for malignancy.\nRECOMMENDATION: Ultrasound-guided core needle biopsy of the left breast mass. The recommendation was discussed with the patient."
   },
   {
-    "id": "P7-path", "patient": "P7", "kind": "pathology", "title": "Pathology report", "date": "2026-09-24",
+    "id": "P7-path", "patient": "P7", "kind": "pathology", "title": "Pathology report", "date": "2026-09-24", "imaging": "P7-dx",
     "text": "SURGICAL PATHOLOGY REPORT\nSPECIMEN: Left breast, 1 o'clock, ultrasound-guided core needle biopsy\nPROCEDURE DATE: 09/21/2026\nDIAGNOSIS: Fibroadenoma. Negative for atypia and malignancy.\nCOMMENT: Findings discussed with the breast imaging team for radiology-pathology correlation."
   },
   {
@@ -52,7 +52,7 @@
     "text": "EXAM: Diagnostic mammogram, right breast. Targeted right breast ultrasound.\nDATE: 09/16/2026\nINDICATION: 67-year-old woman with a new lump in the right breast, found by the patient.\nFINDINGS: In the right breast at 10 o'clock, 6 cm from the nipple, there is a 2.1 cm irregular mass with spiculated margins and associated fine pleomorphic calcifications. Ultrasound shows a corresponding irregular, non-parallel hypoechoic mass with angular margins. No suspicious right axillary lymph nodes.\nIMPRESSION: Highly suspicious right breast mass. BI-RADS 5: Highly suggestive of malignancy.\nRECOMMENDATION: Ultrasound-guided core needle biopsy of the right breast mass. The findings were discussed with the patient."
   },
   {
-    "id": "P8-path", "patient": "P8", "kind": "pathology", "title": "Pathology report", "date": "2026-09-24",
+    "id": "P8-path", "patient": "P8", "kind": "pathology", "title": "Pathology report", "date": "2026-09-24", "imaging": "P8-dx",
     "text": "SURGICAL PATHOLOGY REPORT\nSPECIMEN: Right breast, 10 o'clock, ultrasound-guided core needle biopsy\nPROCEDURE DATE: 09/21/2026\nDIAGNOSIS: Invasive ductal carcinoma, Nottingham grade 2.\nBIOMARKERS: Estrogen receptor positive. Progesterone receptor positive. HER2 negative."
   },
   {
@@ -72,7 +72,19 @@
     "text": "EXAM: Bilateral diagnostic mammogram. Bilateral targeted breast ultrasound.\nDATE: 09/08/2026\nINDICATION: 68-year-old woman recalled from screening on 09/01/2026 for findings in both breasts.\nCOMPARISON: 08/28/2025.\nFINDINGS: Right breast: at 10 o'clock, 4 cm from the nipple, there is a 1.2 cm oval hypoechoic mass with indistinct margins, new since the prior exam. Left breast: at 2 o'clock, 3 cm from the nipple, there is a 6 mm oval circumscribed hypoechoic mass parallel to the skin, without suspicious features.\nIMPRESSION:\n1. Right breast mass at 10 o'clock. BI-RADS 4A: Low suspicion for malignancy.\n2. Left breast mass at 2 o'clock, probably benign. BI-RADS 3: Probably benign.\nOVERALL ASSESSMENT: BI-RADS 4A.\nRECOMMENDATION: Ultrasound-guided core needle biopsy of the right breast mass. Follow-up ultrasound of the left breast in 6 months."
   },
   {
-    "id": "P10-path", "patient": "P10", "kind": "pathology", "title": "Pathology report", "date": "2026-09-18",
+    "id": "P10-path", "patient": "P10", "kind": "pathology", "title": "Pathology report", "date": "2026-09-18", "imaging": "P10-dx",
     "text": "SURGICAL PATHOLOGY REPORT\nSPECIMEN: Right breast, 10 o'clock, ultrasound-guided core needle biopsy\nPROCEDURE DATE: 09/15/2026\nDIAGNOSIS: Fibroadenoma. Negative for atypia and malignancy.\nCOMMENT: Findings discussed with the breast imaging team for radiology-pathology correlation."
+  },
+  {
+    "id": "P11-dx", "patient": "P11", "kind": "imaging", "title": "Diagnostic mammogram and ultrasound", "date": "2026-10-05",
+    "text": "EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound.\nDATE: 10/05/2026\nINDICATION: 72-year-old woman recalled from screening on 09/28/2026 for a left breast mass.\nCOMPARISON: 10/02/2024.\nFINDINGS: In the left breast at 2 o'clock, 7 cm from the nipple, there is a 1.3 cm irregular mass with spiculated margins and associated architectural distortion, new since the prior exam. Ultrasound shows a corresponding irregular, non-parallel hypoechoic mass with angular margins and posterior acoustic shadowing. No suspicious left axillary lymph nodes.\nIMPRESSION: Suspicious left breast mass. BI-RADS 4C: High suspicion for malignancy.\nRECOMMENDATION: Ultrasound-guided core needle biopsy of the left breast mass. The recommendation was discussed with the patient."
+  },
+  {
+    "id": "P11-path", "patient": "P11", "kind": "pathology", "title": "Pathology report", "date": "2026-10-12", "imaging": "P11-dx",
+    "text": "SURGICAL PATHOLOGY REPORT\nSPECIMEN: Left breast, 2 o'clock, ultrasound-guided core needle biopsy\nPROCEDURE DATE: 10/09/2026\nDIAGNOSIS: Benign breast tissue with fibrocystic changes and stromal fibrosis. Negative for atypia and malignancy.\nCOMMENT: Findings discussed with the breast imaging team for radiology-pathology correlation."
+  },
+  {
+    "id": "P11-path2", "patient": "P11", "kind": "pathology", "title": "Pathology report, repeat biopsy", "date": "2026-10-23", "imaging": "P11-dx",
+    "text": "SURGICAL PATHOLOGY REPORT\nSPECIMEN: Left breast, 2 o'clock, ultrasound-guided vacuum-assisted biopsy (repeat)\nPROCEDURE DATE: 10/20/2026\nDIAGNOSIS: Invasive lobular carcinoma, classic type, Nottingham grade 2.\nBIOMARKERS: Estrogen receptor positive. Progesterone receptor positive. HER2 negative."
   }
 ]

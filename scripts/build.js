@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /*
   Builds the demo page from site/template.html, the data, Claude's recorded
-  reads and the agent code. Writes docs/index.html (served by GitHub Pages).
+  reads (replies and report comparisons) and the agent code, which includes the
+  report rules. Writes docs/index.html (served by GitHub Pages).
   Usage: node scripts/build.js [--artifact path/to/page-content.html]
 */
 const fs = require("fs");
@@ -20,8 +21,8 @@ const data = {
   patients: JSON.parse(read("data/patients.json")),
   documents: JSON.parse(read("data/documents.json")),
   replies: JSON.parse(read("data/replies.json")),
-  reads: { documents: JSON.parse(read("reads/documents.json")), replies: JSON.parse(read("reads/replies.json")) },
-  prompts: { document: read("prompts/read_document.txt"), reply: read("prompts/read_reply.txt") },
+  reads: { replies: JSON.parse(read("reads/replies.json")), comparisons: JSON.parse(read("reads/comparisons.json")) },
+  prompts: { compare: read("prompts/compare_reports.txt"), reply: read("prompts/read_reply.txt") },
   run,
 };
 
@@ -30,7 +31,7 @@ if (/<\/script/i.test(agent)) throw new Error("agent.js must not contain a closi
 const t = read("site/template.html");
 const between = (a, b) => t.slice(t.indexOf(a) + a.length, t.indexOf(b));
 const fill = (s) => s
-  .replace("{{PROMPT_DOC}}", escHtml(data.prompts.document.trim()))
+  .replace("{{PROMPT_COMPARE}}", escHtml(data.prompts.compare.trim()))
   .replace("{{PROMPT_REPLY}}", escHtml(data.prompts.reply.trim()))
   .replace(/\{\{WORKFLOW\}\}/g, "data:image/svg+xml;base64," + Buffer.from(read("site/workflow.svg")).toString("base64"))
   .replace("{{DATA}}", JSON.stringify(data).replace(/<\//g, "<\\/"))
@@ -64,10 +65,10 @@ if (i > 0 && process.argv[i + 1]) {
 const SQLJS = "https://cdn.jsdelivr.net/npm/sql.js@1.14.2/dist/";
 const MODULES = ["agent/agent.js", "server/policy.js", "server/loop.js", "server/samples.js", "server/store.js", "server/reader.js", "server/api.js",
   "data/documents.json", "data/replies.json", "data/sample-replies.json", "data/patients.json",
-  "reads/documents.json", "reads/replies.json", "reads/sample-replies.json"];
+  "reads/comparisons.json", "reads/replies.json", "reads/sample-replies.json"];
 const moduleSource = (id) => id.endsWith(".json") ? "module.exports = " + JSON.stringify(JSON.parse(read(id))) + ";" : read(id);
 const loader = `window.WorkspaceModules = (function () {
-  var prompts = ${JSON.stringify({ "read_document.txt": read("prompts/read_document.txt"), "read_reply.txt": read("prompts/read_reply.txt") })};
+  var prompts = ${JSON.stringify({ "compare_reports.txt": read("prompts/compare_reports.txt"), "read_reply.txt": read("prompts/read_reply.txt") })};
   var shims = {
     "node:sqlite": {}, "node:crypto": {},
     "node:fs": { readFileSync: function (p) { return prompts[String(p).split("/").pop()]; }, existsSync: function () { return false; } },
@@ -101,7 +102,7 @@ const workspace = appPage
   .replace('<link rel="stylesheet" href="/app.css">', "<style>\n" + read("app/app.css") + "</style>")
   .replace('<script src="/app.js" defer></script>\n', "")
   .replace('href="/simulation#workflow">View simulation &amp; workflow</a>', 'href="./#workflow">View simulation &amp; workflow</a>')
-  .replace("<footer>", '<footer><p>This page runs the local workspace in your browser: the same page, engine and server code, with SQLite compiled to WebAssembly (sql.js) and Claude’s recorded reads. Your cases stay in this browser. <a href="https://github.com/nitchakorn/BreastCancerScreening#local-agent-workspace">Run it with live Claude reads</a>.</p>')
+  .replace("<footer>", '<footer><p>This page runs the local workspace in your browser: the same page, engine and server code, with SQLite compiled to WebAssembly (sql.js). Rules read every report, so any report works. Claude’s reads of the sample replies and its comparisons of the sample reports were recorded earlier. Your cases stay in this browser. <a href="https://github.com/nitchakorn/BreastCancerScreening#local-agent-workspace">Run it with live Claude reads</a>.</p>')
   .replace("</body>", `<script src="${SQLJS}sql-wasm.js"></script>\n` + browserScripts.map((s) => "<script>\n" + s + "\n</script>").join("\n") + "\n</body>");
 if (/href="\/|src="\//.test(workspace)) throw new Error("workspace.html still has a root-relative link");
 fs.writeFileSync(path.join(root, "docs/workspace.html"), workspace);

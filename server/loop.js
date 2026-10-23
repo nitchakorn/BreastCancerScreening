@@ -49,8 +49,11 @@ function createLoop(store) {
       if (row && row.status === 'closed') return store.note(input.case_id, 'after_close', `This ${input.type} was read after the case closed, so the agent took no action.`, now);
       if (input.type === 'report') {
         let problems = [];
+        const cmp = result.comparison;
+        const comparison = !cmp ? null : cmp.error ? { error: cmp.error }
+          : { read: cmp.read, model: cmp.model, problems: A.checkComparison(cmp.read, cmp.imaging, input.text) };
         step(input.case_id, today, now, (engine, c, day) => {
-          engine.onDoc(c, P.docFor(input, result.read), result.read, day);
+          engine.onDoc(c, P.docFor(input, result.read), result.read, day, { comparison });
         }, { check: (doc, read) => (problems = P.checkReport(input.text, read, today)), resolution: 'A new report came in', model: result.model, mode: result.mode });
         store.inputProblems(input.id, problems);
       } else {
@@ -88,11 +91,16 @@ function createLoop(store) {
         if (review.kind !== 'concordance') throw httpError(409, 'Only a benign pathology result waits for a concordance check.');
         engine.personNote(c, day, who, text || 'The pathology matches the imaging.');
         engine.concordant(c, day);
+      } else if (action === 'discordant') {
+        if (review.kind !== 'concordance') throw httpError(409, 'Only a benign pathology result waits for a concordance check.');
+        engine.personNote(c, day, who, text || 'Not concordant. The result doesn’t explain the imaging finding. Recommend a repeat biopsy.');
+        engine.discordant(c, day);
       } else if (action === 'close') {
         if (!text) throw httpError(400, 'Add a short note saying why the case is closing.');
         engine.closeByPerson(c, day, who, text);
       } else throw httpError(400, 'Unknown action.');
-    }, { resolution: action === 'resume' ? 'Handed back to the agent' : action === 'concordant' ? 'Concordance confirmed' : 'Closed by a person' });
+    }, { resolution: action === 'resume' ? 'Handed back to the agent' : action === 'concordant' ? 'Concordance confirmed'
+      : action === 'discordant' ? 'Not a match: repeat biopsy' : 'Closed by a person' });
   }
 
   return { step, advanceAll, applyRead, book, act };

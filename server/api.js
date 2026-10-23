@@ -32,7 +32,7 @@ function createApi({ store, reader, clock = () => new Date().toISOString(), time
       if (!job) return;
       let result;
       try {
-        result = job.type === 'report' ? await reader.read(job.text) : await reader.readReply(job.text);
+        result = job.type === 'report' ? await reader.read(job.text, { imaging: store.imagingFor(job.case_id) }) : await reader.readReply(job.text);
       } catch (e) {
         const at = nowIso();
         if (e.code === 'invalid_output') return loop.applyRead(job, { read: null, mode: reader.status().mode }, todayOf(at), at);

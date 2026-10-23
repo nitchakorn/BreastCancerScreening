@@ -8,7 +8,9 @@ Women with an abnormal mammogram sometimes get lost before follow-up, especially
 
 This agent follows every finding, on each side, until it's resolved.
 
-Claude reads each breast imaging report, pathology report and patient text reply. Plain code checks those reads, picks the pathway, sets the deadline, decides every follow-up, and hands a case to a person only when a rule says so. When a report gives each breast its own assessment, each breast gets its own case with its own deadline, so a finding on one side can't hide the other. A day-by-day simulation shows the agent working ten made-up patients over 90 days.
+Rules read each breast imaging report and pathology report: the BI-RADS category, the exam date, which breast and the recommendation. Rules pick the pathway, set the deadline, decide every follow-up, and hand a case to a person only when a rule says so. When a report gives each breast its own assessment, each breast gets its own case with its own deadline, so a finding on one side can't hide the other.
+
+Claude does the two jobs that need judgment. It reads her text replies. And when a biopsy result comes back, it compares the pathology report with the imaging report, writes a short side-by-side summary, and flags anything that may not match. A radiologist decides. A day-by-day simulation shows the agent working eleven made-up patients over 90 days.
 
 The deadlines in this demo are placeholders for clinical review. A health system's clinicians would set the real ones.
 
@@ -18,11 +20,28 @@ The deadlines in this demo are placeholders for clinical review. A health system
 
 This is a demo with synthetic patients. It sends no real messages, books nothing and writes to no EHR. Not for clinical use.
 
+## What is a rule, and what needs judgment
+
+The product manager's job here is to ask radiologists and surgeons what has gone wrong before, and build for that. Then decide which parts should be rules and which parts need judgment.
+
+The BI-RADS category and the deadlines are rules. A report states its category in a fixed place, so code reads it the same way every time, and a report that doesn't fit goes to a radiologist instead of a guess. Comparing the radiology and pathology reports needs judgment. A benign biopsy can still be wrong when it doesn't explain what the imaging showed, like a spiculated mass. That's where Claude helps. It puts the two reports side by side and flags what may not match, and the radiologist decides.
+
+| Job | Done by |
+| --- | --- |
+| Read the BI-RADS category, the exam date, which breast and the recommendation | Rules. A report they can't read cleanly goes to a radiologist. |
+| Set deadlines, send reminders, hand the case to a person | Rules |
+| Understand her text replies | Claude, and code checks its quote |
+| Check that a biopsy result explains the imaging | Claude flags. The radiologist decides. |
+
+In the simulation, Claude flagged all three benign biopsies for a closer look. The radiologist confirmed two of them and sent Evelyn B.'s back, because fibrocystic change doesn't explain a spiculated mass. Her repeat biopsy found the cancer, 18 days after her imaging.
+
+The first version had Claude read every report too. Those reads are kept in `reads/documents.json`, and a test checks that the rules read all 19 of those reports the same way, including the one Claude held because its impression said negative while its findings described a mass.
+
 ## Local agent workspace
 
 The workspace runs the same agent on cases you create. Give it a report and it follows up the way the simulation does: a text, a portal message and an automated call, replies read by Claude, bookings, a reminder the day before, and the next report until the result is resolved. People step in through the same handoffs. A demo clock moves time forward, so a month of follow-up takes a few clicks.
 
-The workspace and the simulation share one engine (`createEngine` in `agent/agent.js`). A test replays all ten simulated patients through the workspace and checks that the agent makes the same decisions, 124 of them, on the same days, for each breast that has its own case.
+The workspace and the simulation share one engine (`createEngine` in `agent/agent.js`). A test replays all eleven simulated patients through the workspace and checks that the agent makes the same decisions, 157 of them, on the same days, for each breast that has its own case.
 
 You need Node.js 22.22 or newer (24.5 or newer also works). There are no npm packages to install.
 
@@ -32,17 +51,18 @@ npm start
 
 Open `http://127.0.0.1:3000`. The server only listens on your own computer and has no login, so use synthetic data only.
 
-The public page `docs/workspace.html` is the same workspace running in the browser. `scripts/build.js` bundles the same page and server files, and `site/browser-workspace.js` swaps three things: SQLite runs as WebAssembly (sql.js, loaded from jsDelivr), the page's `/api/` requests are answered in the browser, and Claude's reads are the recorded ones. Cases stay in that browser.
+The public page `docs/workspace.html` is the same workspace running in the browser. `scripts/build.js` bundles the same page and server files, and `site/browser-workspace.js` swaps three things: SQLite runs as WebAssembly (sql.js, loaded from jsDelivr), the page's `/api/` requests are answered in the browser, and Claude's reads are the recorded ones. The rules read any report you give it. Cases stay in that browser.
 
 ### A three-minute demo
 
-1. Pick **Diagnostic imaging** under Try a sample and choose **Read report & start case**. Claude's read is checked, the pathway is set and the first text goes to the test inbox. **Coming up** shows the agent's plan: a portal message on day 2, a call on day 4, and a navigator on day 5 if she never answers.
+1. Pick **Diagnostic imaging** under Try a sample and choose **Read report & start case**. The rules read it, the pathway is set and the first text goes to the test inbox. **Coming up** shows the agent's plan: a portal message on day 2, a call on day 4, and a navigator on day 5 if she never answers.
 2. Choose **+1 day**. Under the test inbox, pick the sample reply **Has no ride** and send it. Claude labels it, code checks the quote, and the agent offers a free ride.
 3. Under **Test schedule**, choose **She booked online**. The agent sees the booking. Move the clock: it texts a reminder the day before, then marks the appointment done and watches for the report.
 4. Under **Reports**, add **Diagnostic result: benign (BI-RADS 2)**. The case closes and shows how many days it took.
 5. Start a **Biopsy pathway** case and send the reply **Scared, asks for a call**. The case goes to the nurse navigator, who can book for her, hand the case back to the agent, or close it with a note.
 6. Start **Conflicting findings**. It is held for a radiologist. Add the **Radiologist addendum** as the next report and the agent picks the case back up.
 7. Start **Both breasts: biopsy right, 6 months left**. The right breast case starts biopsy outreach, and the left breast gets its own case on the six-month track. **Her other breast** links the two. Book the biopsy and add **Pathology: benign fibroadenoma, right breast**. When the right side closes, the timeline says the left side is still open.
+8. Start **Spiculated mass, biopsy needed (BI-RADS 4C)**. Book the biopsy, move the clock past it, and add **Pathology: benign, but may not explain the mass**. Claude's side-by-side summary shows up with its concerns, and the radiologist gets the case. Choose **Doesn't match: repeat biopsy**. The agent tells her doctor and starts booking outreach for the repeat biopsy.
 
 **Start over** clears every case and resets the clock.
 
@@ -50,27 +70,27 @@ The public page `docs/workspace.html` is the same workspace running in the brows
 
 | You do | The agent does |
 | --- | --- |
-| Start a case with a report | Claude reads it, code checks every quote, and the rules set the pathway, the due date and the day a person takes over |
+| Start a case with a report | The rules read it, and set the pathway, the due date and the day a person takes over. A report they can't read cleanly goes to a radiologist with the reason |
 | Give it a report that assesses each breast separately | Opens a case for each breast that needs follow-up, each with its own pathway, deadline and messages. The case list and the case page show which breast. Closing one side notes that the other side is still open |
 | Move the clock | Runs its daily check for every day in between: texts, portal messages, calls, check-ins, reminders, overdue notes and handoffs |
 | Reply as the patient | Claude labels the reply and quotes it, and code checks the quote. No ride gets a ride offer, another time gets open slots, and a booking claim gets checked against the schedule. Fear, medical questions, refusals, wrong numbers and unclear replies go to the navigator. While a person has the case, the agent reads her replies but doesn't answer them |
 | Book in the test schedule | Trusts the schedule over what she says, texts a reminder the day before, and marks the appointment done on the day |
-| Add the next report | Reads and checks it like the first one. A result can close the case, start a biopsy pathway or release a radiologist hold |
-| Act as the navigator or radiologist | Hand the case back to the agent, book for her, confirm that benign pathology matches the imaging, or close the case with a note |
+| Add the next report | Reads it like the first one. A result can close the case, start a biopsy pathway or release a radiologist hold. A pathology result gets Claude's side-by-side comparison with the imaging |
+| Act as the navigator or radiologist | Hand the case back to the agent, book for her, confirm that a benign result matches the imaging, call it a mismatch so the agent follows her to a repeat biopsy, or close the case with a note |
 
 Two watches exist only in the workspace, because in the simulation the report always arrives on time. The agent hands the case to a navigator if the imaging report is not in 3 days after the appointment, or if pathology is not in 10 days after the biopsy.
 
 ### Recorded mode: no key required
 
-With no API key, the workspace uses **recorded mode**. Claude's reads of the bundled reports and replies were recorded earlier with Claude Code (see `reads/`). Sample reports get their dates moved to the demo clock, and recorded mode moves the dates in the recorded read the same way. Any other text fails openly and can be retried in live mode. It never borrows another sample's answer.
+With no API key, the workspace uses **recorded mode**. The rules read every report in every mode, so any report works. Claude's reads of the bundled replies and its comparisons of the sample biopsy results were recorded earlier with Claude Code (see `reads/`). Sample reports get their dates moved to the demo clock, and recorded mode moves the dates in the recorded comparison the same way. A reply it hasn't seen fails openly and can be retried in live mode. A biopsy result with no recorded comparison still goes to the radiologist, with a note that no comparison is available. It never borrows another sample's answer.
 
 ### Live reading with Claude Code: no API key
 
-If you have [Claude Code](https://claude.com/claude-code) installed and signed in, the workspace can read any new report or reply through it. Copy `.env.example` to `.env`, set `READER_MODE=claude-code`, and run `npm start`. Each read runs `claude -p` with the text on stdin, tools turned off, no saved session, and the same JSON schema the API mode uses, so the answer comes back already in shape. Code still checks every quote before the agent acts. If `claude` is not on your PATH, set `CLAUDE_CODE_COMMAND` to the full path of the program.
+If you have [Claude Code](https://claude.com/claude-code) installed and signed in, the workspace can read any new reply and compare any biopsy result through it. Copy `.env.example` to `.env`, set `READER_MODE=claude-code`, and run `npm start`. Each call runs `claude -p` with the text on stdin, tools turned off, no saved session, and the same JSON schema the API mode uses, so the answer comes back already in shape. Code still checks every quote before the agent acts. If `claude` is not on your PATH, set `CLAUDE_CODE_COMMAND` to the full path of the program.
 
 ### Live mode with an API key
 
-Keep credentials in a local `.env` file, never in Git or chat. Copy `.env.example` to `.env`, set `READER_MODE=live` and `ANTHROPIC_API_KEY`, and restart. Leave `ANTHROPIC_MODEL` blank to use an available Sonnet model. Reports and replies go to the Claude API with a forced tool call (`record_report` or `record_reply`), and their text is treated as source material, never as instructions. Code checks every read before the agent acts. A failed API call keeps the item with a **Retry** button. An unusable answer goes to a person.
+Keep credentials in a local `.env` file, never in Git or chat. Copy `.env.example` to `.env`, set `READER_MODE=live` and `ANTHROPIC_API_KEY`, and restart. Leave `ANTHROPIC_MODEL` blank to use an available Sonnet model. Replies and report pairs go to the Claude API with a forced tool call (`record_reply` or `record_comparison`), and their text is treated as source material, never as instructions. Code checks every quote before the agent acts. A failed reply read keeps the item with a **Retry** button. A comparison that can't be made never blocks the case: the radiologist gets it with the reason.
 
 ### Saved data
 
@@ -80,18 +100,18 @@ Cases, reports, replies, messages, handoffs and events are stored in `.local/cas
 
 ```sh
 npm test            # everything below, with no model calls
-npm run check       # print the ten-patient simulation
+npm run check       # print the eleven-patient simulation
 npm run build       # rebuild docs/index.html
 ```
 
 | Test | What it proves |
 | --- | --- |
 | `test/simulation.test.js` | The simulation prints exactly the saved timelines and summary |
-| `test/parity.test.js` | The workspace makes the same decisions on the same days as the simulation, for all ten patients and each breast |
-| `test/loop.test.js` | Outreach, replies, bookings, results, people's actions and the demo clock, through the HTTP API, including a report with findings in both breasts |
+| `test/parity.test.js` | The workspace makes the same decisions on the same days as the simulation, for all eleven patients and each breast |
+| `test/loop.test.js` | Outreach, replies, bookings, results, people's actions and the demo clock, through the HTTP API, including a report with findings in both breasts and a benign biopsy that doesn't match the imaging |
 | `test/workflow.test.js` | Intake, duplicates, restarts, retries and request checks |
-| `test/policy.test.js` | A bad read is held for a person instead of messaging her |
-| `test/reader.test.js` | Recorded and live reading, with the API mocked |
+| `test/policy.test.js` | The rules read every report the same way Claude did in the first version. A report the rules can't read, or a bad read, is held for a person instead of messaging her. A comparison with an inexact quote isn't used |
+| `test/reader.test.js` | Rules read reports in every mode with no model call. Recorded, live and Claude Code comparisons and replies, with the API mocked |
 
 | Path | Purpose |
 | --- | --- |
@@ -99,23 +119,24 @@ npm run build       # rebuild docs/index.html
 | `server/loop.js` | Runs the shared engine for saved cases, one day at a time |
 | `server/policy.js` | Checks every read and works out what the page shows |
 | `server/store.js` | SQLite records, one transaction per change |
-| `server/reader.js` | Recorded mode and the live Claude API reader |
+| `server/reader.js` | Rules for reports, and recorded or live Claude reads for replies and comparisons |
 | `server/samples.js` | Sample reports and replies, dated to the demo clock |
 | `app/` | The workspace page |
 
 ## How it works
 
 1. **A new report arrives.** This starts the agent.
-2. **Claude reads the report.** It returns the BI-RADS category, which breast needs follow-up, the recommended next step, the exam date and the exact words that support each one. When the report assesses each breast separately, it also returns each breast's category and next step, with quotes.
-3. **Code checks the read.** Every quote must match the report word for word. If the BI-RADS category is missing, or the findings and the impression disagree, the case goes to a radiologist and stops there.
+2. **Rules read the report.** They pull out the BI-RADS category, the exam date, which breast and the recommendation, each with the exact words it came from. When the report gives each breast its own category, they read each one.
+3. **A report that doesn't fit the rules goes to a radiologist.** No category, two categories for one breast, or a negative impression over findings that describe a mass: the case stops there until a radiologist looks at it.
 4. **Rules pick the pathway and set a due date for each breast** (table below). When each breast has its own assessment, each breast gets its own case, and the more urgent side goes first.
 5. **The agent waits and watches.** Each day it checks whether the next step was booked or done.
 6. **If the next step isn't booked, the agent reaches out.** It texts a booking link and checks the schedule. Claude reads her replies. No ride means a free ride option, and another time means new slots. No answer means a portal message, then an automated call.
 7. **A person steps in only for exceptions.** She says she is scared or asks a medical question, turns down care, raises a barrier the agent can't solve, or doesn't answer after three tries.
-8. **A new result comes in and the loop starts again.** A diagnostic mammogram or a pathology report goes back through steps 2 to 4.
-9. **The case closes when the result is resolved.** Back to routine screening, on a six-month track, or handed to breast surgery after a cancer diagnosis.
+8. **A new result comes in and the loop starts again.** A diagnostic mammogram goes back through steps 2 to 4.
+9. **When a biopsy result comes back, Claude compares it with the imaging.** It writes a short side-by-side summary and flags anything that may not match, with the exact words from both reports. Code checks every quote. A radiologist decides. If it doesn't match, the agent follows her to a repeat biopsy.
+10. **The case closes when the result is resolved.** Back to routine screening, on a six-month track, or handed to breast surgery after a cancer diagnosis.
 
-Claude never decides what happens next. It only reads and quotes. That keeps every decision traceable to a quote and a rule, and a rule change is a code change that can be tested.
+Claude never decides what happens next. It reads her replies and compares reports, and every quote it gives is checked against the source. That keeps every decision traceable to a quote and a rule, and a rule change is a code change that can be tested.
 
 ## Pathways and deadlines
 
@@ -128,12 +149,13 @@ These deadlines are placeholders for clinical review. A health system's clinicia
 | 3 | Short-interval imaging | 6 months | 1 month before due | 1 month after due, or any exception |
 | 4 or 5 | Biopsy | 14 days | As soon as the report is read | Day 7 if not booked, or any exception. For BI-RADS 5 the navigator also gets a heads-up on day 1, but the case doesn't wait on her. |
 | After biopsy | Pathology result | 10 days after biopsy | None. The agent never gives results. | Day 10 if no result |
+| Benign result that doesn't match | Repeat biopsy | 14 days from the radiologist's call | As soon as the radiologist calls it | Day 7 if not booked, or any exception |
 
-Each breast with its own assessment follows its own row. Closing one side never closes the other.
+Each breast with its own assessment follows its own row. Closing one side never closes the other. A BI-RADS 5 finding with a benign biopsy is always flagged by rule, whatever Claude says.
 
 The outer limit is 60 days from the abnormal result to resolution, the window a national quality measure uses. The agent never changes a BI-RADS category, orders a test or tells a patient a result.
 
-## The ten demo patients
+## The eleven demo patients
 
 | | Path |
 | --- | --- |
@@ -143,12 +165,13 @@ The outer limit is 60 days from the abnormal result to resolution, the window a 
 | P4 | BI-RADS 0. No answer to a text, a portal message or a call, so a navigator takes over. |
 | P5 | BI-RADS 3. Books from the reminder. Stable at 6 months. |
 | P6 | BI-RADS 3. Ignores the reminders. Goes to a navigator one month after the due date. |
-| P7 | BI-RADS 4. Says she is scared, so a navigator calls her. Benign biopsy, and a person confirms it matches the imaging. |
+| P7 | BI-RADS 4. Says she is scared, so a navigator calls her. Benign biopsy. Claude flags the partly indistinct margins, and the radiologist confirms it matches the imaging. |
 | P8 | BI-RADS 5. Books the biopsy right away. Cancer, handed to breast surgery. |
 | P9 | Unclear report: the impression says negative but the findings describe a possible mass. Held for a radiologist, who corrects it. |
-| P10 | Findings in both breasts: BI-RADS 4A on the right, BI-RADS 3 on the left. Books the right-side biopsy from the first text. Benign, and a person confirms it matches the imaging. The right side is resolved in 11 days. The left side stays open on its six-month track, due March 8, 2027, and the agent keeps following it. |
+| P10 | Findings in both breasts: BI-RADS 4A on the right, BI-RADS 3 on the left. Books the right-side biopsy from the first text. Benign. Claude flags the indistinct margins, and the radiologist confirms it matches the imaging. The right side is resolved in 11 days. The left side stays open on its six-month track, due March 8, 2027, and the agent keeps following it. |
+| P11 | BI-RADS 4C, a spiculated mass. Her biopsy comes back benign. Claude flags that fibrocystic change doesn't explain the mass, and the radiologist calls it a mismatch. The agent tells her doctor and texts her to book a repeat biopsy. She replies that her doctor's office said the biopsy was benign, so a navigator calls her and books it. The repeat biopsy finds invasive lobular carcinoma, and breast surgery takes over 18 days after her imaging. |
 
-At the end of the 90 days, all seven abnormal results are resolved within 60 days (median 9 days), four of ten patients needed a person for an exception or an unclear report, and Joyce K.'s left breast is still on its six-month track.
+At the end of the 90 days, all eight abnormal results are resolved within 60 days (median 10 days), five of eleven patients needed a person for an exception or an unclear report, and Joyce K.'s left breast is still on its six-month track.
 
 ## Run it yourself
 
@@ -156,7 +179,7 @@ You need [Node.js](https://nodejs.org).
 
 ```
 node scripts/check.js        # print every patient's timeline and the summary
-node scripts/check.js P7     # one patient
+node scripts/check.js P11    # one patient
 node scripts/build.js        # rebuild docs/index.html
 ```
 
@@ -166,15 +189,15 @@ The **Workflow** section contains the full flowchart. Choose **Expand flowchart*
 
 The diagram source is `site/workflow.dot`, with its rendered image in `site/workflow.svg`. If you edit the diagram, regenerate it with Graphviz (`dot -Tsvg site/workflow.dot -o site/workflow.svg`), then run `node scripts/build.js` to update the page.
 
-To run the reading step again, you also need [Claude Code](https://claude.com/claude-code) installed and signed in:
+To run Claude's part again, you also need [Claude Code](https://claude.com/claude-code) installed and signed in:
 
 ```
-node scripts/read.js         # sends every report and reply to Claude, saves to reads/
+node scripts/read.js         # sends every reply, and each biopsy result with its imaging report, to Claude; saves to reads/
 node scripts/read.js --samples   # reads the extra workspace replies only
-node scripts/read.js --only P10-dx,P10-path,P10-r1 --note "what was added"   # reads only those items and adds them to the saved run
+node scripts/read.js --only P11-r1,P11-path --note "what was added"   # reads only those items and adds them to the saved run
 ```
 
-The first 24 reads were recorded on Oct 22, 2026. Joyce K.'s three were recorded on Oct 23 with the updated document prompt, which adds a per-breast list when a report gives each breast its own assessment. The older reports assess one breast or give a single category, so their reads don't have that list and don't need it.
+Claude's comparisons of the five biopsy results and Evelyn B.'s reply were recorded on Oct 23, 2026 (6 calls, about 11 cents). The other replies were recorded on Oct 22 and 23, in the same runs as the first version's report reads.
 
 No API key is stored in this repo. The page replays the recorded reads in `reads/`, so it works without one.
 
@@ -182,13 +205,13 @@ No API key is stored in this repo. The page replays the recorded reads in `reads
 
 | Path | What it is |
 | --- | --- |
-| `data/documents.json` | The reports, the addendum and the pathology reports, all made up |
+| `data/documents.json` | The reports, the addendum and the pathology reports, all made up. Each pathology report names the imaging report it follows |
 | `data/replies.json` | Patients' text replies |
 | `data/sample-replies.json` | Extra replies for the workspace, so every reply rule has a sample |
 | `data/patients.json` | The patients, and how the simulated world reacts to the agent |
-| `prompts/` | The two prompts Claude gets: one for documents, one for replies |
-| `reads/` | What Claude returned in the recorded run |
-| `agent/agent.js` | The rules, the engine and the day-by-day simulation |
+| `prompts/` | The two prompts Claude gets: one to compare a biopsy result with the imaging, one for replies |
+| `reads/` | What Claude returned: replies, comparisons, and the first version's report reads that the tests check the rules against |
+| `agent/agent.js` | The report rules, the follow-up rules, the engine and the day-by-day simulation |
 | `server/`, `app/` | The local workspace |
 | `test/` | Tests, including the simulation's saved output in `test/fixtures/` |
 | `scripts/` | Reading, checking and building |

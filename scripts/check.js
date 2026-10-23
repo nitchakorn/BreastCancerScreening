@@ -11,7 +11,7 @@ const input = {
   patients: load("data/patients.json"),
   documents: load("data/documents.json"),
   replies: load("data/replies.json"),
-  reads: { documents: load("reads/documents.json"), replies: load("reads/replies.json") },
+  reads: { replies: load("reads/replies.json"), comparisons: load("reads/comparisons.json") },
 };
 const { events, snapshots } = A.simulate(input);
 const only = process.argv[2];

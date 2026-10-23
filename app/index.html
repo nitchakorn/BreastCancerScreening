@@ -49,7 +49,7 @@
             <label for="report">Report text</label>
             <textarea id="report" name="report" rows="10" minlength="30" maxlength="20000" placeholder="Paste a synthetic imaging or pathology report…" required></textarea>
             <button type="submit" id="submit">Read report &amp; start case</button>
-            <p class="muted small">Recorded mode uses the bundled samples without an API call. Live mode uses your Claude API account. Cases are saved before reading. Test messages use the first name in the label.</p>
+            <p class="muted small">Rules read every report, in every mode, with no model, so any report works. Claude reads her replies and compares biopsy results with the imaging: recorded for the samples, or live with your Claude account. Cases are saved before reading. Test messages use the first name in the label.</p>
             <p id="form-status" role="status"></p>
             <p id="form-error" class="error" role="alert" hidden></p>
           </form>
@@ -75,6 +75,7 @@
             <div class="person-actions">
               <button type="button" id="resume" class="secondary compact" hidden>Hand back to the agent</button>
               <button type="button" id="concordant" class="compact" hidden>Confirm it matches the imaging</button>
+              <button type="button" id="discordant" class="secondary compact" hidden>Doesn’t match: repeat biopsy</button>
               <span class="muted small" id="person-hint"></span>
             </div>
             <form id="close-form" class="inline-form">
@@ -83,6 +84,7 @@
             </form>
             <p id="person-error" class="error" role="alert" hidden></p>
           </div>
+          <div id="comparison" class="comparison" hidden></div>
 
           <div class="case-section">
             <h3>Coming up <span class="muted small">deadlines are placeholders for clinical review</span></h3>

@@ -1,13 +1,20 @@
 #!/usr/bin/env node
 /*
-  The reading step. Sends every report and every patient reply to Claude,
-  one call each, and saves what Claude says to reads/.
+  The model step. Rules read the reports (agent/agent.js, readReport), so Claude only gets
+  the two jobs that need judgment, one call each, and what it says is saved to reads/:
+    - each patient text reply                         -> reads/replies.json
+    - each pathology report next to the imaging report
+      that led to the biopsy (radiology-pathology
+      correlation)                                    -> reads/comparisons.json
 
   Needs Claude Code installed and signed in (the `claude` command).
-  Usage: node scripts/read.js              reports and replies used by the simulation
+  Usage: node scripts/read.js              every reply and every comparison used by the simulation
          node scripts/read.js --samples    extra sample replies for the workspace only
-         node scripts/read.js --only P10-dx,P10-r1 --note "what was added"
+         node scripts/read.js --only P11-r1,P11-path --note "what was added"
                                            reads only those items and adds them to the saved run
+
+  reads/documents.json holds Claude's reads of the reports from the first version, when Claude
+  read the reports too. The tests use it to check that the rules read every report the same way.
 */
 const fs = require("fs");
 const path = require("path");
@@ -20,18 +27,21 @@ const docs = JSON.parse(read("data/documents.json"));
 const replies = JSON.parse(read("data/replies.json"));
 const samplesOnly = process.argv.includes("--samples");
 const sampleReplies = JSON.parse(read("data/sample-replies.json"));
-const docPrompt = read("prompts/read_document.txt");
+const comparePrompt = read("prompts/compare_reports.txt");
 const replyPrompt = read("prompts/read_reply.txt");
 const rawDir = path.join(root, "reads/raw");
 fs.mkdirSync(rawDir, { recursive: true });
 
+const byId = Object.fromEntries(docs.map((d) => [d.id, d]));
 const replyJob = (r) => ({ id: r.id, kind: "reply", input: replyPrompt + "\n\nHer reply:\n" + r.text });
+const compareJob = (d) => ({ id: d.id, kind: "compare", imaging: d.imaging,
+  input: comparePrompt + "\n\nIMAGING REPORT:\n" + byId[d.imaging].text + "\n\nPATHOLOGY REPORT:\n" + d.text });
 const onlyArg = process.argv.indexOf("--only");
 const only = onlyArg > 0 ? process.argv[onlyArg + 1].split(",") : null;
 const noteArg = process.argv.indexOf("--note");
 const allJobs = samplesOnly ? sampleReplies.map(replyJob) : [
-  ...docs.map((d) => ({ id: d.id, kind: "document", input: docPrompt + "\n\nDocument:\n" + d.text })),
   ...replies.map(replyJob),
+  ...docs.filter((d) => d.kind === "pathology" && d.imaging).map(compareJob),
 ];
 const jobs = only ? allJobs.filter((j) => only.includes(j.id)) : allJobs;
 
@@ -65,7 +75,7 @@ async function main() {
 }
 
 function collect() {
-  const outDocs = {}, outReplies = {};
+  const outReplies = {}, outCompare = {};
   let cost = 0;
   const ms = [], models = {};
   for (const job of jobs) {
@@ -75,7 +85,8 @@ function collect() {
     let parsed = null;
     try { parsed = m ? JSON.parse(m[0]) : null; } catch (e) { parsed = null; }
     if (!parsed) console.warn("could not parse " + job.id);
-    (job.kind === "document" ? outDocs : outReplies)[job.id] = parsed;
+    if (job.kind === "compare") outCompare[job.id] = { imaging: job.imaging, comparison: parsed };
+    else outReplies[job.id] = parsed;
     cost += raw.total_cost_usd || 0;
     if (raw.duration_ms) ms.push(raw.duration_ms);
     for (const [name, u] of Object.entries(raw.modelUsage || {})) models[name] = (models[name] || 0) + (u.outputTokens || 0);
@@ -89,29 +100,23 @@ function collect() {
     total_cost_usd: Math.round(cost * 1000) / 1000,
     median_seconds: ms.length ? Math.round(ms[Math.floor(ms.length / 2)] / 100) / 10 : null,
   };
-  if (only) {
-    // Add these reads to the saved run without touching the others.
-    const merge = (file, add) => {
-      const all = JSON.parse(fs.readFileSync(path.join(root, file), "utf8"));
-      Object.assign(all, add);
-      fs.writeFileSync(path.join(root, file), JSON.stringify(all, null, 2) + "\n");
-    };
-    if (Object.keys(outDocs).length) merge("reads/documents.json", outDocs);
-    if (Object.keys(outReplies).length) merge(samplesOnly ? "reads/sample-replies.json" : "reads/replies.json", outReplies);
-    if (!samplesOnly) {
-      const saved = JSON.parse(fs.readFileSync(path.join(root, "reads/run.json"), "utf8"));
-      saved.added = (saved.added || []).concat([{ date: run.date, ids: jobs.map((j) => j.id), calls: run.calls, total_cost_usd: run.total_cost_usd,
-        model: run.model, note: noteArg > 0 ? process.argv[noteArg + 1] : "" }]);
-      fs.writeFileSync(path.join(root, "reads/run.json"), JSON.stringify(saved, null, 2) + "\n");
-    }
-  } else if (samplesOnly) {
+  const merge = (file, add) => {
+    const full = path.join(root, file);
+    const all = fs.existsSync(full) ? JSON.parse(fs.readFileSync(full, "utf8")) : {};
+    Object.assign(all, add);
+    fs.writeFileSync(full, JSON.stringify(all, null, 2) + "\n");
+  };
+  if (samplesOnly) {
     // Workspace samples are kept apart, so the simulation's recorded run stays exactly as it was.
-    fs.writeFileSync(path.join(root, "reads/sample-replies.json"), JSON.stringify(outReplies, null, 2) + "\n");
+    merge("reads/sample-replies.json", outReplies);
     fs.writeFileSync(path.join(root, "reads/sample-run.json"), JSON.stringify(run, null, 2) + "\n");
   } else {
-    fs.writeFileSync(path.join(root, "reads/documents.json"), JSON.stringify(outDocs, null, 2) + "\n");
-    fs.writeFileSync(path.join(root, "reads/replies.json"), JSON.stringify(outReplies, null, 2) + "\n");
-    fs.writeFileSync(path.join(root, "reads/run.json"), JSON.stringify(run, null, 2) + "\n");
+    if (Object.keys(outReplies).length) merge("reads/replies.json", outReplies);
+    if (Object.keys(outCompare).length) merge("reads/comparisons.json", outCompare);
+    const saved = JSON.parse(fs.readFileSync(path.join(root, "reads/run.json"), "utf8"));
+    saved.added = (saved.added || []).concat([{ date: run.date, ids: jobs.map((j) => j.id), calls: run.calls, total_cost_usd: run.total_cost_usd,
+      model: run.model, median_seconds: run.median_seconds, note: noteArg > 0 ? process.argv[noteArg + 1] : "" }]);
+    fs.writeFileSync(path.join(root, "reads/run.json"), JSON.stringify(saved, null, 2) + "\n");
   }
   console.log(run);
 }

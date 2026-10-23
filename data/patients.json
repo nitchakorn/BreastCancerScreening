@@ -71,5 +71,15 @@
       { "when": "outreach", "doc": "P10-dx", "side": "right", "after": 1, "reply": "P10-r1", "book": { "appt": "2026-09-15", "kind": "biopsy", "result": "P10-path", "resultAfter": 3 } },
       { "when": "concordance", "side": "right", "after": 1, "person": "Radiologist", "note": "Fibroadenoma matches the right breast imaging. Concordant." }
     ]
+  },
+  {
+    "id": "P11", "name": "Evelyn B.", "first": "Evelyn", "age": 72, "path": "BI-RADS 4C. Her biopsy comes back benign, but the result doesn't explain a spiculated mass. The radiologist calls it a mismatch, and the agent follows her to a repeat biopsy, which finds cancer.",
+    "first_doc": "P11-dx", "arrives": "2026-10-05",
+    "reactions": [
+      { "when": "outreach", "doc": "P11-dx", "after": 1, "book": { "appt": "2026-10-09", "kind": "biopsy", "result": "P11-path", "resultAfter": 3 } },
+      { "when": "concordance", "after": 1, "person": "Radiologist", "decision": "discordant", "note": "Not concordant. Fibrocystic change doesn't explain a spiculated mass with distortion, so the needle may have missed it. Recommend a repeat biopsy. Sent a note to her doctor." },
+      { "when": "outreach", "doc": "P11-path", "after": 1, "reply": "P11-r1" },
+      { "when": "handoff", "after": 1, "person": "Nurse navigator", "note": "Called her. Her doctor's office had told her the biopsy was benign, so she thought she was done. Explained that the radiologist needs more tissue because the result doesn't match the imaging. She booked the repeat biopsy.", "book": { "appt": "2026-10-20", "kind": "biopsy", "result": "P11-path2", "resultAfter": 3 } }
+    ]
   }
 ]

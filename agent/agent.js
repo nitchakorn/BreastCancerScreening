@@ -1,10 +1,15 @@
 /*
   Breast screening follow-up agent: the rules and a day-by-day simulation.
 
-  Claude reads every report and every patient reply (scripts/read.js saves those
-  reads in reads/). Everything in this file is plain code. It checks Claude's
-  reads, picks the pathway, sets the due date, decides each outreach step, and
-  hands a case to a person only when a rule says so.
+  Everything in this file is plain code. Rules read each report (readReport): the
+  BI-RADS category, the exam date, which breast and the recommendation. Rules pick
+  the pathway, set the due date, decide each outreach step, and hand a case to a
+  person only when a rule says so.
+
+  Claude does the two jobs that need judgment (scripts/read.js saves those reads
+  in reads/): it reads her text replies, and when a biopsy result comes back it
+  compares the pathology report with the imaging report and flags anything that
+  may not match. Code checks every quote Claude gives. A radiologist decides.
 
   The simulated world (when a patient replies, books, or what a navigator does)
   comes from data/patients.json. The agent never sees that script. It only sees
@@ -88,9 +93,166 @@
   }
   function catOf(b) { return b === "1" || b === "2" ? "1-2" : b === "0" ? "0" : b === "3" ? "3" : b === "4" || b === "5" ? "4-5" : "unclear"; }
 
+  /* ---------- reading a report by rule (step 2) ---------- */
+  /*
+    Reports follow a fixed layout: EXAM, DATE, FINDINGS, IMPRESSION, RECOMMENDATION, or for
+    pathology SPECIMEN, PROCEDURE DATE, DIAGNOSIS. These rules read that layout the same way
+    every time and never guess. When a report doesn't fit them, the read says why in "unclear"
+    and the case goes to a radiologist. Every value comes with the exact words it was read from.
+  */
+  var LABEL = /^([A-Z][A-Z ]*[A-Z]):\s*(.*)$/;
+  var GROWS = ["FINDINGS", "IMPRESSION", "CORRECTED IMPRESSION", "RECOMMENDATION", "DIAGNOSIS", "COMMENT", "INDICATION", "HISTORY"];
+  var CATEGORY = /BI-RADS\s*(?:category\s*)?:?\s*([0-6][ABC]?)\b/gi;
+  var FINDING = /\b(mass(?:es)?|asymmetr(?:y|ies)|calcifications?|distortion|lesions?|nodules?)\b/gi;
+  var NEGATED = /\b(no|not|without|negative for)\b/i;
+
+  // The report's labeled sections. A line without a label belongs to the section above it.
+  function sectionsOf(text) {
+    var out = {}, last = null;
+    String(text || "").replace(/\r\n?/g, "\n").split("\n").forEach(function (raw, i) {
+      var line = raw.trim(), m = line.match(LABEL);
+      if (!line) return;
+      if (i === 0 && /^ADDENDUM\b/.test(line)) { last = "ADDENDUM"; out.ADDENDUM = { line: line, value: line, lines: [] }; return; }
+      if (!m && /^[A-Z][A-Z ]+$/.test(line)) { last = "HEADER"; out.HEADER = { line: line, value: line, lines: [] }; return; }
+      if (m && !out[m[1]]) { last = m[1]; out[last] = { line: line, value: m[2], lines: m[2] ? [m[2]] : [] }; return; }
+      if (last && GROWS.indexOf(last) >= 0) { out[last].lines.push(line); return; }
+      (out.NOTE = out.NOTE || { line: line, value: "", lines: [] }).lines.push(line);
+    });
+    return out;
+  }
+  // Sentences, split at a period followed by a space, so "1.3 cm" stays whole.
+  function sentencesOf(s) { return (String(s || "").match(/(?:[^.]|\.(?=\S))+\.?/g) || []).map(function (x) { return x.trim(); }).filter(Boolean); }
+  function sideIn(s) {
+    var right = /\bright\b/i.test(s || ""), left = /\bleft\b/i.test(s || "");
+    return right !== left ? (right ? "right" : "left") : null;
+  }
+  function isoFrom(s) {
+    var m = String(s || "").match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
+    if (!m) return null;
+    var iso = m[3] + "-" + m[1] + "-" + m[2], d = new Date(iso + "T12:00:00Z");
+    return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso ? iso : null;
+  }
+  function categoriesIn(s) {
+    var out = [], m, re = new RegExp(CATEGORY.source, "gi");
+    while ((m = re.exec(s))) out.push(m[1].toUpperCase());
+    return out;
+  }
+  function urgencyOf(b) { var p = pathwayFor(normBirads(b)); return p in URGENCY ? URGENCY[p] : -1; }
+  function noPeriod(s) { return s ? s.replace(/\.$/, "") : s; }
+
+  function readReport(text) {
+    var sec = sectionsOf(text), unclear = [];
+    var r = { doc_type: null, exam_date: null, side: null, birads: null, next_step: null, findings_match_impression: null, mismatch_quote: null,
+      pathology_result: null, diagnosis: null, breasts: [], quotes: { exam_date: null, birads: null, next_step: null, pathology_result: null }, unclear: unclear, reader: "rules" };
+    var exam = sec.EXAM ? sec.EXAM.value : "";
+    r.doc_type = (sec.HEADER && /PATHOLOGY/.test(sec.HEADER.line)) || (sec.DIAGNOSIS && sec.SPECIMEN) ? "pathology"
+      : sec.ADDENDUM || sec["CORRECTED IMPRESSION"] ? "addendum"
+      : /screening/i.test(exam) ? "screening" : /diagnostic/i.test(exam) ? "diagnostic" : /ultrasound/i.test(exam) ? "ultrasound" : null;
+    if (!r.doc_type) { unclear.push("The rules don't recognize this kind of report."); return r; }
+
+    // The exam date. An addendum counts from the exam it corrects.
+    var dateLine = r.doc_type === "pathology" ? sec["PROCEDURE DATE"] : r.doc_type === "addendum" ? (isoFrom(sec.ADDENDUM && sec.ADDENDUM.line) ? sec.ADDENDUM : sec["DATE OF ADDENDUM"]) : sec.DATE;
+    r.exam_date = dateLine ? isoFrom(dateLine.line) : null;
+    if (r.exam_date) r.quotes.exam_date = dateLine.line; else unclear.push("No valid exam date.");
+
+    if (r.doc_type === "pathology") {
+      r.side = sec.SPECIMEN ? sideIn(sec.SPECIMEN.value) : null;
+      var dx = sec.DIAGNOSIS;
+      if (!dx || !dx.value) { unclear.push("No diagnosis."); return r; }
+      // Phrases that rule something out ("Negative for atypia and malignancy") don't count as findings.
+      var kept = dx.lines.join(" ").replace(/\b(negative for|no evidence of|without|no)\b[^.;]*/gi, " ");
+      var highRisk = /lobular carcinoma in situ|\bLCIS\b|atypi/i.test(kept);
+      kept = kept.replace(/lobular carcinoma in situ/gi, " ");
+      r.pathology_result = /carcinoma|malignan|sarcoma|lymphoma|\bDCIS\b/i.test(kept) ? "malignant" : highRisk ? "atypia"
+        : /non-?diagnostic|insufficient|inadequate/i.test(kept) ? "nondiagnostic"
+        : /benign|fibroadenoma|fibrocystic|fat necrosis|stromal fibrosis|\bcysts?\b/i.test(kept) ? "benign" : null;
+      if (!r.pathology_result) unclear.push("The diagnosis isn't one the rules know.");
+      r.quotes.pathology_result = dx.value;
+      r.diagnosis = sentencesOf(dx.lines.join(" ")).map(function (s, i) { s = noPeriod(s); return i ? s.charAt(0).toLowerCase() + s.slice(1) : s; }).join(", ");
+      return r;
+    }
+
+    // The BI-RADS category, from the impression. Numbered impression lines can assess each breast on its own.
+    var imp = sec["CORRECTED IMPRESSION"] || sec.IMPRESSION, overall = sec["OVERALL ASSESSMENT"];
+    var items = imp ? (imp.lines.length > 1 ? imp.lines : [imp.lines.join(" ")]).map(function (l) { return l.replace(/^\d+\.\s*/, ""); }) : [];
+    var found = [];
+    items.forEach(function (item) {
+      categoriesIn(item).forEach(function (cat) {
+        var said = sentencesOf(item).filter(function (s) { return categoriesIn(s).length; })[0];
+        found.push({ cat: cat, side: sideIn(item), item: item, sentence: said });
+      });
+    });
+    var overallCat = overall ? categoriesIn(overall.value)[0] || null : null;
+    var cats = found.map(function (f) { return f.cat; }).filter(function (c, i, a) { return a.indexOf(c) === i; });
+    var rec = sec.RECOMMENDATION ? sentencesOf(sec.RECOMMENDATION.value) : [];
+    if (!found.length && !overallCat) unclear.push("No BI-RADS category in the impression.");
+    else if (cats.length > 1 || (found.length > 1 && found.every(function (f) { return f.side; }) && found[0].side !== found[1].side)) {
+      // More than one category: fine only when each one names its own breast.
+      if (!found.every(function (f) { return f.side; })) unclear.push("The impression gives more than one BI-RADS category without saying which breast each is for.");
+      else {
+        var bySide = {};
+        found.forEach(function (f) {
+          if (bySide[f.side] && bySide[f.side].birads !== f.cat) unclear.push("The " + f.side + " breast has two different BI-RADS categories.");
+          var step = rec.filter(function (s) { return sideIn(s) === f.side; })[0] || null;
+          bySide[f.side] = bySide[f.side] || { side: f.side, birads: f.cat, next_step: noPeriod(step), quotes: { birads: f.item, next_step: step } };
+        });
+        r.breasts = ["right", "left"].filter(function (s) { return bySide[s]; }).map(function (s) { return bySide[s]; });
+        var worst = r.breasts.slice().sort(function (a, b) { return urgencyOf(a.birads) - urgencyOf(b.birads); })[0];
+        if (overallCat && urgencyOf(overallCat) > urgencyOf(worst.birads)) unclear.push("The overall assessment is less urgent than the " + worst.side + " breast's category.");
+        r.birads = overallCat || worst.birads;
+        r.quotes.birads = overallCat ? overall.line : worst.quotes.birads;
+        if (r.breasts.length < 2) r.breasts = [];
+      }
+    } else {
+      r.birads = cats[0] || overallCat;
+      if (overallCat && cats[0] && overallCat !== cats[0]) unclear.push("The overall assessment and the impression give different categories.");
+      r.quotes.birads = found.length ? found[0].sentence : overall.line;
+    }
+
+    // Which breast: the exam names it, or for an addendum, the recommendation does.
+    r.side = /bilateral/i.test(exam) ? "both" : sideIn(exam) || sideIn(rec[0]) || (imp ? sideIn(imp.lines.join(" ")) : null);
+    r.next_step = noPeriod(rec[0]) || null;
+    r.quotes.next_step = rec[0] || null;
+
+    // A negative report (BI-RADS 1) whose findings describe something that isn't ruled out doesn't add up.
+    r.findings_match_impression = true;
+    if (normBirads(r.birads) === "1" && sec.FINDINGS) {
+      sentencesOf(sec.FINDINGS.lines.join(" ")).forEach(function (s) {
+        var m, re = new RegExp(FINDING.source, "gi");
+        while ((m = re.exec(s))) {
+          if (!NEGATED.test(s.slice(0, m.index)) && r.findings_match_impression) { r.findings_match_impression = false; r.mismatch_quote = s; }
+        }
+      });
+    }
+    return r;
+  }
+
+  /* ---------- checking Claude's radiology-pathology comparison ---------- */
+  // Every quote must be in the report it came from, word for word. A comparison that fails is not used.
+  function checkComparison(x, imaging, pathology) {
+    var problems = [];
+    if (!x || typeof x !== "object") return ["No comparison came back."];
+    var has = function (text, q) { return typeof q === "string" && q.trim() !== "" && String(text).indexOf(q) >= 0; };
+    if (["concordant", "possible_mismatch", "unclear"].indexOf(x.match) < 0) problems.push("The comparison doesn't say whether the reports match.");
+    var iq = (x.imaging && x.imaging.quotes) || {};
+    Object.keys(iq).forEach(function (k) { if (iq[k] !== null && iq[k] !== undefined && !has(imaging, iq[k])) problems.push("The imaging " + k + " quote isn't in the imaging report word for word."); });
+    if (!x.pathology || !has(pathology, x.pathology.quote)) problems.push("The diagnosis quote isn't in the pathology report word for word.");
+    var flags = Array.isArray(x.flags) ? x.flags : [];
+    if (!Array.isArray(x.flags)) problems.push("The list of concerns is missing.");
+    flags.forEach(function (f, i) {
+      if (!f || typeof f.concern !== "string" || !f.concern.trim()) return problems.push("Concern " + (i + 1) + " is empty.");
+      if (!has(imaging, f.imaging_quote)) problems.push("Concern " + (i + 1) + " quotes the imaging report inexactly.");
+      if (!has(pathology, f.pathology_quote)) problems.push("Concern " + (i + 1) + " quotes the pathology report inexactly.");
+    });
+    if (x.match === "possible_mismatch" && !flags.length) problems.push("A possible mismatch needs at least one concern with quotes.");
+    if (typeof x.summary !== "string" || !x.summary.trim()) problems.push("The summary is missing.");
+    return problems;
+  }
+
   function checkRead(doc, r) {
     var problems = [];
-    if (!r) return ["Claude's answer could not be read."];
+    if (!r) return ["The report could not be read."];
+    (Array.isArray(r.unclear) ? r.unclear : []).forEach(function (p) { problems.push(p); });
     var q = r.quotes || {};
     Object.keys(q).forEach(function (k) {
       if (q[k] && doc.text.indexOf(q[k]) < 0) problems.push("The quote for " + k.replace("_", " ") + " is not in the report word for word.");
@@ -111,8 +273,8 @@
       return problems;
     }
     if (!normBirads(r.birads)) problems.push("No BI-RADS category in the impression.");
-    if (r.findings_match_impression === false) problems.push("The findings and the impression disagree" + (r.mismatch_quote ? ": \"" + r.mismatch_quote + "\"" : "") + ".");
-    return problems;
+    if (r.findings_match_impression === false) problems.push("The impression says negative, but the findings describe something" + (r.mismatch_quote ? ": \"" + r.mismatch_quote + "\"" : "") + ".");
+    return problems.filter(function (p, i) { return problems.indexOf(p) === i; });
   }
 
   function summarizeRead(doc, r) {
@@ -179,14 +341,15 @@
     A case is plain data (see newCase), so the workspace can save it between steps.
       hooks.log(event, c)               records what happened
       hooks.world(c, when, day, ctx)    lets the simulated world react (the workspace has no script)
-      hooks.check(doc, read)            returns problems with Claude's read (default: checkRead)
+      hooks.check(doc, read)            returns problems with the report's read (default: checkRead)
       hooks.side(c, side, read, doc, day)   a report gave another breast its own assessment: follow it on its own track
       hooks.openTracks(c)               the patient's other tracks that are still open
     A case follows one patient, or one breast of a patient when a report assesses each breast separately.
   */
   function newCase(patient) {
     return { patient: patient, started: false, closed: null, person: null, booked: null, step: null, openCat: null, openDate: null,
-      resolvedDay: null, neededPerson: false, used: {}, lastAgent: null, birads: null, bi3: null, side: null, sideSource: null, multi: false };
+      resolvedDay: null, neededPerson: false, used: {}, lastAgent: null, birads: null, bi3: null, side: null, sideSource: null, multi: false,
+      imagingDoc: null, pathDoc: null };
   }
 
   function createEngine(hooks) {
@@ -232,16 +395,16 @@
       });
     }
 
-    function openUrgentStep(c, day, kind, exam, docId) {
+    function openUrgentStep(c, day, kind, exam, docId, name) {
       var cfg = RULES[kind];
       c.step = {
-        kind: kind, name: cfg.step, due: addDays(exam, cfg.dueDays), personDay: dayOf(exam) + cfg.personIfNotBookedByDay,
+        kind: kind, name: name || cfg.step, due: addDays(exam, cfg.dueDays), personDay: dayOf(exam) + cfg.personIfNotBookedByDay,
         doc: docId, attempts: 0, replied: false, lastContact: null, noAnswerDay: day + RULES.urgent.noAnswerHandoffAfter,
         plan: RULES.urgent.attempts.map(function (a) { return { day: day + a.after, channel: a.channel, done: false }; }),
         overdueLogged: false
       };
       c.booked = null;
-      log(c, day, "agent", "pathway", "Pathway: " + cfg.step.toLowerCase() + ", due " + fmt(c.step.due) + ". Outreach starts now.", { short: "Due date set: " + fmtShort(c.step.due) });
+      log(c, day, "agent", "pathway", "Pathway: " + c.step.name.toLowerCase() + ", due " + fmt(c.step.due) + ". Outreach starts now.", { short: "Due date set: " + fmtShort(c.step.due) });
       // A report read after the hand-off day goes straight to a person instead of starting outreach.
       if (day >= c.step.personDay) handoff(c, day, "Nurse navigator", "This report is already beyond the unbooked handoff threshold (day " + cfg.personIfNotBookedByDay + " after the exam), so a person takes it now.", "Report came in late, sent to the navigator", "exception");
     }
@@ -262,11 +425,11 @@
       c.started = true;
       if (opts.split) {
         // Another case's report gave this breast its own assessment. The checks already ran on the whole report.
-        c.multi = true; c.sideSource = "assessment"; c.side = r.side;
+        c.multi = true; c.sideSource = "assessment"; c.side = r.side; c.imagingDoc = doc.id;
         log(c, day, "agent", "split", "Following the " + r.side + " breast on its own: " + summarizeRead(doc, r) + ".", { doc: doc.id, short: "Started a separate case for the " + r.side + " breast" });
       } else {
         log(c, day, "system", "doc", (opts.source ? opts.source + ". " : "") + doc.title + " arrived.", { doc: doc.id });
-        log(c, day, "agent", "read", "Claude read the " + doc.title.toLowerCase() + ": " + summarizeRead(doc, r) + ".", { doc: doc.id, short: "Read the " + doc.title.toLowerCase() });
+        log(c, day, "agent", "read", "The rules read the " + doc.title.toLowerCase() + ": " + summarizeRead(doc, r) + ".", { doc: doc.id, short: "Read the " + doc.title.toLowerCase() });
         var problems = check(doc, r);
         if (problems.length) {
           log(c, day, "agent", "check", "Check failed. " + problems.join(" "), { doc: doc.id, ok: false });
@@ -275,12 +438,13 @@
           handoff(c, day, "Radiologist", "The report is unclear, so the case stops here until a radiologist looks at it.", "Held for a radiologist: report unclear", "hold");
           return;
         }
-        log(c, day, "agent", "check", "Checks passed. Every quote matches the report word for word" + (doc.kind === "pathology" ? "." : ", and the findings fit the impression."), { doc: doc.id, ok: true });
+        log(c, day, "agent", "check", "Checks passed. " + (doc.kind === "pathology" ? "The diagnosis is one the rules know." : "One clear BI-RADS category, a valid exam date, and findings that fit the impression."), { doc: doc.id, ok: true });
         if (c.person && c.person.kind === "hold") {
           c.person = null;
           log(c, day, "agent", "note", "The radiologist's correction passed the checks. The agent picks the case back up.", { short: "Picked the case back up" });
         }
-        if (doc.kind === "pathology") return onPathology(c, doc, r, day);
+        if (doc.kind === "pathology") return onPathology(c, doc, r, day, opts.comparison);
+        c.imagingDoc = doc.id;
         // A report that gives each breast its own assessment: this case follows one breast, and each other breast gets a case of its own.
         var sides = perBreast(r);
         if (sides.length) {
@@ -341,14 +505,40 @@
       handoff(c, day, "Radiologist", "BI-RADS " + r.birads + " has no pathway in these rules.", "No pathway, sent to a person", "hold");
     }
 
-    function onPathology(c, doc, r, day) {
-      var res = r.pathology_result;
+    // Claude's side-by-side summary of the imaging and pathology reports, and any concerns it flags.
+    // A rule adds one concern of its own: BI-RADS 5 imaging with a benign result never matches.
+    function compare(c, doc, r, day, cmp) {
+      var concerns = [];
+      if (!cmp) log(c, day, "agent", "compare", "There is no imaging report on this case to compare the pathology with.", { doc: doc.id });
+      else if (cmp.error) log(c, day, "agent", "compare", "Claude's comparison of the two reports isn't available. " + cmp.error, { doc: doc.id });
+      else if (cmp.problems && cmp.problems.length) log(c, day, "agent", "compare", "Claude's comparison failed the quote check, so it isn't used. " + cmp.problems[0], { doc: doc.id, ok: false });
+      else {
+        var x = cmp.read;
+        log(c, day, "agent", "compare", "Claude compared the imaging and pathology reports. " + x.summary, { doc: doc.id, short: "Compared the imaging and pathology reports", comparison: x, match: x.match });
+        x.flags.forEach(function (f) {
+          concerns.push(f.concern);
+          log(c, day, "agent", "flag", "Possible mismatch: " + f.concern + " Imaging: \u201c" + f.imaging_quote + "\u201d Pathology: \u201c" + f.pathology_quote + "\u201d", { doc: doc.id, short: "Flagged a possible mismatch" });
+        });
+      }
+      if (r.pathology_result === "benign" && normBirads(c.birads) === "5") {
+        concerns.push("BI-RADS 5 imaging with a benign result never counts as a match.");
+        log(c, day, "agent", "flag", "Rule: BI-RADS 5 imaging with a benign result never counts as a match, so it goes back to the radiologist as a possible mismatch.", { doc: doc.id, short: "Flagged a possible mismatch", rule: true });
+      }
+      return concerns;
+    }
+
+    function onPathology(c, doc, r, day, cmp) {
+      var res = r.pathology_result, dx = r.diagnosis ? r.diagnosis.charAt(0).toLowerCase() + r.diagnosis.slice(1) : "no diagnosis given";
+      c.pathDoc = doc.id;
+      var concerns = compare(c, doc, r, day, cmp);
       if (res === "malignant") {
-        log(c, day, "agent", "pcp", "Note to the ordering PCP: pathology shows " + r.diagnosis + ". Breast surgery is taking over.", { short: "Told the ordering PCP" });
+        log(c, day, "agent", "pcp", "Note to the ordering PCP: pathology shows " + dx + ". Breast surgery is taking over.", { short: "Told the ordering PCP" });
         handoff(c, day, "Breast surgery team", "Cancer diagnosis: " + r.diagnosis + ". Her care moves to the surgery team.", "Pathology received, handed to breast surgery", "surgery");
         close(c, day, "Cancer diagnosed and handed to breast surgery. The agent's loop is done.", "Handed to breast surgery");
+      } else if (res === "benign" && concerns.length) {
+        handoff(c, day, "Radiologist", "Benign result: " + dx + ". It may not match the imaging. " + concerns[0] + " The radiologist decides whether it matches before the case closes.", "Possible mismatch sent to the radiologist", "concordance");
       } else if (res === "benign") {
-        handoff(c, day, "Radiologist", "Benign result (" + r.diagnosis + "). A person confirms it matches the imaging before the case closes.", "Benign result sent for a match check", "concordance");
+        handoff(c, day, "Radiologist", "Benign result: " + dx + ". A person confirms it matches the imaging before the case closes.", "Benign result sent for a match check", "concordance");
       } else {
         handoff(c, day, "Radiologist", "Pathology is " + res + ". A person decides the next step.", "Pathology needs a person", "hold");
       }
@@ -396,6 +586,12 @@
     // People in the loop. The simulation scripts them; in the workspace they are buttons.
     function personNote(c, day, who, note) { log(c, day, "person", "person", note, { who: who }); }
     function concordant(c, day) { c.person = null; close(c, day, "Benign and concordant. Back to annual screening.", "Resolved: benign and concordant"); }
+    // The radiologist found the benign result doesn't explain the imaging: the agent follows her to a repeat biopsy.
+    function discordant(c, day) {
+      c.person = null;
+      log(c, day, "agent", "pcp", "Note to the ordering PCP: the radiologist found that the benign biopsy result doesn't match the imaging and recommends a repeat biopsy. The agent is helping her schedule it.", { short: "Told the ordering PCP" });
+      openUrgentStep(c, day, "biopsy", dateOf(day), c.pathDoc, "Repeat biopsy");
+    }
     function resume(c, day) {
       c.person = null;
       if (c.step) { c.step.replied = true; c.step.lastContact = day; }
@@ -470,7 +666,7 @@
     }
 
     return { onDoc: onDoc, onReply: onReply, onBook: onBook, tick: tick, status: status, snapshot: snapshot,
-      personNote: personNote, concordant: concordant, resume: resume, closeByPerson: closeByPerson };
+      personNote: personNote, concordant: concordant, discordant: discordant, resume: resume, closeByPerson: closeByPerson };
   }
 
   /* ---------- the simulation ---------- */
@@ -478,8 +674,17 @@
     var docsById = {}, repliesById = {};
     input.documents.forEach(function (d) { docsById[d.id] = d; });
     input.replies.forEach(function (r) { repliesById[r.id] = r; });
-    var reads = input.reads;
+    var reads = input.reads, ruleReads = {};
     var events = [], agenda = {}, cases = {}, snapshots = [];
+    function readOf(doc) { return ruleReads[doc.id] || (ruleReads[doc.id] = readReport(doc.text)); }
+    // Claude's recorded comparison for this biopsy, checked against both reports. Only used for the pair it was made for.
+    function comparisonFor(c, doc) {
+      if (doc.kind !== "pathology") return null;
+      if (!c.imagingDoc) return null;
+      var saved = reads.comparisons && reads.comparisons[doc.id];
+      if (!saved || saved.imaging !== c.imagingDoc) return { error: "No recorded comparison for these two reports." };
+      return { read: saved.comparison, problems: checkComparison(saved.comparison, docsById[saved.imaging].text, doc.text) };
+    }
     // Each patient has one case, plus one more per breast when a report assesses each breast separately.
     var tracksOf = {}, trackByKey = {}, lastAgentOf = {};
     var RANK = { overdue: 0, person: 1, agent: 2, booked: 3, done: 4, waiting: 5 };
@@ -544,7 +749,7 @@
     function onPerson(c, item, day) {
       var r = item.react;
       engine.personNote(c, day, r.person, r.note);
-      if (r.when === "concordance") { engine.concordant(c, day); return; }
+      if (r.when === "concordance") { if (r.decision === "discordant") engine.discordant(c, day); else engine.concordant(c, day); return; }
       if (r.doc) schedule(day, { type: "doc", patient: c.patient.id, doc: r.doc });
       if (r.book) engine.onBook(c, r.book, day, true);
     }
@@ -554,7 +759,7 @@
       do {
         while (agenda[day] && agenda[day].length) {
           var it = agenda[day].shift(), c = (it.track && trackByKey[it.track]) || cases[it.patient];
-          if (it.type === "doc") engine.onDoc(c, docsById[it.doc], reads.documents[it.doc], day, { source: it.first ? c.patient.source : null });
+          if (it.type === "doc") { var d = docsById[it.doc]; engine.onDoc(c, d, readOf(d), day, { source: it.first ? c.patient.source : null, comparison: comparisonFor(c, d) }); }
           else if (it.type === "reply") engine.onReply(c, repliesById[it.reply], reads.replies[it.reply], day);
           else if (it.type === "book") engine.onBook(c, it.book, day, false);
           else if (it.type === "person") onPerson(c, it, day);
@@ -571,7 +776,7 @@
   }
 
   var api = { RULES: RULES, EXCEPTIONS: EXCEPTIONS, TEMPLATES: TEMPLATES, simulate: simulate, createEngine: createEngine, newCase: newCase,
-    checkRead: checkRead, summarizeRead: summarizeRead, normBirads: normBirads, pathwayFor: pathwayFor, catOf: catOf,
+    readReport: readReport, checkComparison: checkComparison, checkRead: checkRead, summarizeRead: summarizeRead, normBirads: normBirads, pathwayFor: pathwayFor, catOf: catOf,
     followSide: followSide, perBreast: perBreast, sideRead: sideRead,
     addDays: addDays, addMonths: addMonths, dayOf: dayOf, dateOf: dateOf, fmt: fmt, fmtShort: fmtShort, weekday: weekday, message: message };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.BreastAgent = api;

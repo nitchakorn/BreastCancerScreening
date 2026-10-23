@@ -23,7 +23,7 @@ function submit(base, report, extra = {}) {
   return fetch(base+'/api/cases',{ method:'POST',headers:{'content-type':'application/json',...extra.headers},body:JSON.stringify({patient:'Synthetic patient',report,...extra.body}) });
 }
 
-test('upload → recorded read → persisted diagnostic case → one test message',async t=>{
+test('upload → rule read → persisted diagnostic case → one test message',async t=>{
   const {app,base}=await fixture(t);
   const response=await submit(base,samples[0].text);
   assert.equal(response.status,202);
@@ -34,11 +34,11 @@ test('upload → recorded read → persisted diagnostic case → one test messag
   assert.equal(item.status,'awaiting_booking');
   assert.equal(item.pathway,'diagnostic');
   assert.equal(item.due,'2026-11-06');
-  assert.equal(item.readerMode,'recorded');
+  assert.equal(item.readerMode,'rules');
   assert.equal(item.messages.length,1);
   assert.equal(item.reviews.length,0);
   assert(item.events.some(e=>e.kind==='validation_passed'));
-  assert(item.events.some(e=>e.detail.includes('no model API call')));
+  assert(item.events.some(e=>e.detail.includes('No model reads it')));
   await app.runOnce();
   assert.equal(app.store.get(item.id).messages.length,1);
 });
@@ -173,14 +173,15 @@ test('provider failure saves a retryable case; retry reuses it and sends once',a
   assert.equal(attempts,2);
 });
 
-test('recorded mode fails honestly on a new report, without silently using another fixture',async t=>{
+test('the rules read a new report that is not a sample, with no model',async t=>{
   const {app,base}=await fixture(t);
-  const saved=await (await submit(base,samples[0].text+'\nA new finding.')).json();
+  const text=samples[0].text.replace('posterior depth','middle depth').replace('BI-RADS 0: Incomplete.','BI-RADS 0: Incomplete, call back.');
+  const saved=await (await submit(base,text)).json();
   await app.runOnce();
   const item=app.store.get(saved.case.id);
-  assert.equal(item.status,'read_failed');
-  assert.match(item.problems[0],/Recorded mode recognizes only/);
-  assert.equal(item.messages.length,0);
+  assert.equal(item.status,'awaiting_booking');
+  assert.equal(item.read.birads,'0');
+  assert.equal(item.messages.length,1);
 });
 
 test('malformed model output goes to human review, not a patient message',async t=>{
@@ -209,7 +210,7 @@ test('HTTP validation rejects invalid bodies, cross-origin writes, oversized rep
   assert.equal(badHostStatus,403);
   assert.equal((await fetch(base+'/server/store.js')).status,404);
   const data=await (await fetch(base+'/api/examples')).json();
-  assert.equal(data.length,9);
+  assert.equal(data.length,10);
   assert(data.every(item=>item.text.includes('DATE: 10/23/2026')));
 });
 

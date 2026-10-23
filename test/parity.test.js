@@ -1,4 +1,4 @@
-// The workspace and the simulation share one engine. This replays the simulation's ten patients
+// The workspace and the simulation share one engine. This replays the simulation's eleven patients
 // through the workspace (saved cases, recorded reads, bookings, people) and checks that the agent
 // makes the same decisions on the same days, for each breast that has its own case.
 const { test } = require('node:test');
@@ -10,7 +10,7 @@ const { createReader } = require('../server/reader.js');
 
 const input = {
   patients: require('../data/patients.json'), documents: require('../data/documents.json'), replies: require('../data/replies.json'),
-  reads: { documents: require('../reads/documents.json'), replies: require('../reads/replies.json') }
+  reads: { replies: require('../reads/replies.json'), comparisons: require('../reads/comparisons.json') }
 };
 const US = /\b(\d{2})\/(\d{2})\/(\d{4})\b/g;
 const K = A.dayOf('2026-10-23'); // move the whole timeline so day 0 is Oct 23, 2026
@@ -18,13 +18,13 @@ const move = text => text.replace(US, m => { const iso = A.addDays(`${m.slice(6)
 const decisions = events => events.filter(e => e.actor === 'agent')
   .map(e => [e.day, e.kind === 'validation_passed' || e.kind === 'validation_held' ? 'check' : e.kind, e.handoffKind || e.channel || ''].join(' '));
 
-test('the workspace makes the same decisions on the same days as the simulation, for all ten patients and each breast', async () => {
+test('the workspace makes the same decisions on the same days as the simulation, for all eleven patients and each breast', async () => {
   const sim = A.simulate(input);
   const store = openStore(':memory:'), loop = createLoop(store), reader = createReader({ env: { READER_MODE: 'recorded' } });
   const caseOf = {};
   async function readQueued(today, now) {
     for (let job = store.claim(now, 'recorded'); job; job = store.claim(now, 'recorded')) {
-      loop.applyRead(job, job.type === 'report' ? await reader.read(job.text) : await reader.readReply(job.text), today, now);
+      loop.applyRead(job, job.type === 'report' ? await reader.read(job.text, { imaging: store.imagingFor(job.case_id) }) : await reader.readReply(job.text), today, now);
     }
   }
   for (let day = 0; day <= A.RULES.days; day++) {
@@ -48,8 +48,9 @@ test('the workspace makes the same decisions on the same days as the simulation,
         const book = p.reactions.map(r => r.book).find(b => b && e.text.includes(A.fmt(b.appt)));
         loop.book(caseOf[p.id], A.addDays(book.appt, K), /with the navigator/.test(e.text) ? 'navigator' : 'patient', today, now);
       } else if (e.actor === 'person' && p.reactions.some(r => r.when === 'concordance' && r.note === e.text)) {
+        const decision = p.reactions.find(r => r.when === 'concordance' && r.note === e.text).decision === 'discordant' ? 'discordant' : 'concordant';
         const review = store.get(caseOf[p.id]).reviews.find(r => r.kind === 'concordance' && r.status === 'open');
-        loop.act(caseOf[p.id], review.id, 'concordant', e.text, today, now);
+        loop.act(caseOf[p.id], review.id, decision, e.text, today, now);
       }
     }
     loop.advanceAll(today, now);
@@ -72,6 +73,6 @@ test('the workspace makes the same decisions on the same days as the simulation,
     });
     assert.equal(main.agent.resolvedDays, last[p.id].resolvedDays, `${p.id} days to resolution`);
   }
-  assert(compared > 100, `compared ${compared} decisions`);
+  assert(compared >= 150, `compared ${compared} decisions`);
   store.close();
 });
