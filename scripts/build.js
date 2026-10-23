@@ -47,6 +47,58 @@ console.log("wrote docs/index.html (" + page.length + " bytes)");
 
 const i = process.argv.indexOf("--artifact");
 if (i > 0 && process.argv[i + 1]) {
-  fs.writeFileSync(process.argv[i + 1], head + "\n" + body + "\n");
+  // The artifact copy lives outside GitHub Pages, so it links to the workspace page there.
+  fs.writeFileSync(process.argv[i + 1], head + "\n" + body.replace('href="workspace.html"', 'href="https://nitchakorn.github.io/BreastCancerScreening/workspace.html" target="_blank" rel="noopener"') + "\n");
   console.log("wrote " + process.argv[i + 1]);
 }
+
+/*
+  docs/workspace.html: the local workspace page, running in the browser.
+  The server modules are bundled as they are, with a tiny module loader. Only node:sqlite,
+  node:crypto and the prompt files are swapped (see site/browser-workspace.js).
+*/
+const SQLJS = "https://cdn.jsdelivr.net/npm/sql.js@1.14.2/dist/";
+const MODULES = ["agent/agent.js", "server/policy.js", "server/loop.js", "server/samples.js", "server/store.js", "server/reader.js", "server/api.js",
+  "data/documents.json", "data/replies.json", "data/sample-replies.json", "data/patients.json",
+  "reads/documents.json", "reads/replies.json", "reads/sample-replies.json"];
+const moduleSource = (id) => id.endsWith(".json") ? "module.exports = " + JSON.stringify(JSON.parse(read(id))) + ";" : read(id);
+const loader = `window.WorkspaceModules = (function () {
+  var prompts = ${JSON.stringify({ "read_document.txt": read("prompts/read_document.txt"), "read_reply.txt": read("prompts/read_reply.txt") })};
+  var shims = {
+    "node:sqlite": {}, "node:crypto": {},
+    "node:fs": { readFileSync: function (p) { return prompts[String(p).split("/").pop()]; }, existsSync: function () { return false; } },
+    "node:path": { join: function () { return [].slice.call(arguments).join("/"); }, dirname: function (p) { return String(p).split("/").slice(0, -1).join("/"); }, basename: function (p) { return String(p).split("/").pop(); } }
+  };
+  var defs = {
+${MODULES.map((id) => "    " + JSON.stringify(id) + ": function (module, exports, require, __dirname) {\n" + moduleSource(id) + "\n    }").join(",\n")}
+  };
+  var cache = {};
+  function resolve(dir, spec) {
+    var parts = (dir ? dir.split("/") : []).concat(spec.split("/")), out = [];
+    parts.forEach(function (p) { if (p === "..") out.pop(); else if (p && p !== ".") out.push(p); });
+    return out.join("/");
+  }
+  function load(id) {
+    if (cache[id]) return cache[id].exports;
+    if (!defs[id]) throw new Error("Module not bundled: " + id);
+    var module = cache[id] = { exports: {} }, dir = id.split("/").slice(0, -1).join("/");
+    defs[id].call(module.exports, module, module.exports, function (spec) { return spec.indexOf("node:") === 0 ? shims[spec] : load(resolve(dir, spec)); }, dir);
+    return module.exports;
+  }
+  return { load: load, shims: shims };
+})();`;
+
+const appPage = read("app/index.html");
+const appScript = "window.startWorkspaceApp = function () {\n" + read("app/app.js") + "\n};";
+const browserScripts = [loader, appScript, `window.SQLJS_BASE = ${JSON.stringify(SQLJS)};`, read("site/browser-workspace.js")]
+  .map((s) => s.replace(/<\/script/gi, "<\\/script").replace(/<!--/g, "<\\!--"));
+const workspace = appPage
+  .replace('<title>Agent workspace · Breast screening follow-up</title>', '<title>Try the agent · Breast screening follow-up</title>')
+  .replace('<link rel="stylesheet" href="/app.css">', "<style>\n" + read("app/app.css") + "</style>")
+  .replace('<script src="/app.js" defer></script>\n', "")
+  .replace('href="/simulation#workflow">View simulation &amp; workflow</a>', 'href="./#workflow">View simulation &amp; workflow</a>')
+  .replace("<footer>", '<footer><p>This page runs the local workspace in your browser: the same page, engine and server code, with SQLite compiled to WebAssembly (sql.js) and Claude’s recorded reads. Your cases stay in this browser. <a href="https://github.com/nitchakorn/BreastCancerScreening#local-agent-workspace">Run it with live Claude reads</a>.</p>')
+  .replace("</body>", `<script src="${SQLJS}sql-wasm.js"></script>\n` + browserScripts.map((s) => "<script>\n" + s + "\n</script>").join("\n") + "\n</body>");
+if (/href="\/|src="\//.test(workspace)) throw new Error("workspace.html still has a root-relative link");
+fs.writeFileSync(path.join(root, "docs/workspace.html"), workspace);
+console.log("wrote docs/workspace.html (" + workspace.length + " bytes)");

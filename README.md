@@ -6,6 +6,8 @@ Claude reads each breast imaging report, pathology report and patient text reply
 
 **Live demo:** turn on GitHub Pages for this repo (Settings, then Pages, then deploy from the `main` branch and the `/docs` folder). The page will be at `https://nitchakorn.github.io/BreastCancerScreening/`.
 
+**Try the agent yourself:** `workspace.html` on the same site (`https://nitchakorn.github.io/BreastCancerScreening/workspace.html`) runs the local workspace in your browser, with nothing to install. Give it a report, reply as the patient, book an appointment and move the clock forward.
+
 This is a demo with synthetic patients. It sends no real messages, books nothing and writes to no EHR. Not for clinical use.
 
 ## Local agent workspace
@@ -21,6 +23,8 @@ npm start
 ```
 
 Open `http://127.0.0.1:3000`. The server only listens on your own computer and has no login, so use synthetic data only.
+
+The public page `docs/workspace.html` is the same workspace running in the browser. `scripts/build.js` bundles the same page and server files, and `site/browser-workspace.js` swaps three things: SQLite runs as WebAssembly (sql.js, loaded from jsDelivr), the page's `/api/` requests are answered in the browser, and Claude's reads are the recorded ones. Cases stay in that browser.
 
 ### A three-minute demo
 
@@ -167,4 +171,6 @@ No API key is stored in this repo. The page replays the recorded reads in `reads
 | `test/` | Tests, including the simulation's saved output in `test/fixtures/` |
 | `scripts/` | Reading, checking and building |
 | `site/template.html` | The page template |
+| `site/browser-workspace.js` | What changes when the workspace runs in the browser |
 | `docs/index.html` | The built page |
+| `docs/workspace.html` | The built workspace that runs in the browser |

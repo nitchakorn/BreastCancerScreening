@@ -28,13 +28,13 @@ function setAsideOldDatabase(filename) {
   return aside;
 }
 
-function openStore(filename) {
+function openStore(filename, { Database = DatabaseSync } = {}) {
   let setAside = null;
   if (filename !== ':memory:') {
     fs.mkdirSync(path.dirname(filename), { recursive: true, mode: 0o700 });
     setAside = setAsideOldDatabase(filename);
   }
-  const db = new DatabaseSync(filename);
+  const db = new Database(filename);
   db.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS cases (
       id TEXT PRIMARY KEY, patient TEXT NOT NULL, status TEXT NOT NULL, pathway TEXT, due TEXT, next_action TEXT,

@@ -266,8 +266,10 @@
     try {
       const [health, data] = await Promise.all([api('/api/health'), api('/api/cases')]);
       renderClock(health.clock);
-      $('connection').classList.toggle('warning', !health.reader.configured || health.reader.mode === 'recorded');
-      $('connection').textContent = health.reader.mode === 'recorded'
+      $('connection').classList.toggle('warning', health.runtime !== 'browser' && (!health.reader.configured || health.reader.mode === 'recorded'));
+      $('connection').textContent = health.runtime === 'browser'
+        ? 'This demo runs in your browser with Claude’s recorded reads of the sample reports and replies. Pick samples to run the whole loop. To have Claude read new text live, run the workspace on your computer.'
+        : health.reader.mode === 'recorded'
         ? 'Recorded mode · no API calls. Claude’s reads of the bundled sample reports and replies were recorded earlier. Pick samples to run the whole loop. New text needs live mode.'
         : health.reader.configured
         ? `Live mode. Claude reads every report and reply with ${health.reader.model}. All messages go to the local test inbox.`
