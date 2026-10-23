@@ -24,7 +24,7 @@ Open the local address printed by the server, normally `http://127.0.0.1:3000`. 
 
 With no API key configured, the workspace uses **recorded mode**, clearly identified in the banner and each case's action history. It recognizes the eight bundled synthetic reports, with their exam/procedure date adjusted to today. It does not read arbitrary new reports or call a model. Altered or unknown reports fail explicitly; they never silently use a different sample's answer.
 
-Try **Diagnostic imaging** to create a case due in 14 days and a test-inbox message. **Routine screening** closes without outreach. **Conflicting findings** creates a review task without sending a patient message. **BI-RADS 5** adds a navigator heads-up while outreach continues. Pathology always goes to human review in this milestone. Six-month cases wait until one month before their due date for the initial message.
+Try **Diagnostic imaging** to create a case due in 14 days and a test-inbox message. **Routine screening** closes without outreach. **Conflicting findings** creates a review task without sending a patient message. **BI-RADS 5** adds a navigator heads-up while outreach continues. Pathology always goes to human review in this milestone. Six-month cases wait until one month before their due date for the initial message. Bookings can't be confirmed yet in this milestone, so a case that is still waiting for a booking goes to a navigator at its deadline: 7 days after the report for a biopsy, 30 days for diagnostic imaging, and one month after the due date for six-month imaging.
 
 Cases, messages, review tasks and events are stored in `.local/cases.sqlite`, which is excluded from Git. Duplicate submissions with the same patient label and report reuse the case. The initial local message is committed atomically with the case decision and has a unique delivery key. Restarting resumes interrupted reads without duplicating that message. An interrupted live model call may be repeated; local delivery deduplication does not imply model-call billing is exactly once.
 
@@ -36,7 +36,7 @@ Keep credentials in environment settings or a local `.env` file, never in Git or
 
 Live mode calls `api.anthropic.com` using the existing report prompt and a structured `record_report` tool. Code checks the supporting quotes, category and date before selecting an action. A failed API request retains the case with a **Retry report read** action. An unusable structured answer enters human review. The API key stays on the server. In the managed cloud environment, the start command preserves the configured proxy and CA verification.
 
-This first milestone stops at **report → read → saved pathway → initial test message or review**. Reply processing, confirmed bookings, repeat outreach and external messaging integrations are future work. Recorded-mode readiness does not establish that live API access works.
+This first milestone stops at **report → read → saved pathway → initial test message or review → navigator handoff if still unbooked at the deadline**. Reply processing, confirmed bookings, repeat outreach and external messaging integrations are future work. Recorded-mode readiness does not establish that live API access works.
 
 ### Validate and demonstrate
 

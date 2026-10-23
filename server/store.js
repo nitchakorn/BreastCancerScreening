@@ -2,6 +2,7 @@ const { DatabaseSync } = require('node:sqlite');
 const { randomUUID, createHash } = require('node:crypto');
 const { mkdirSync } = require('node:fs');
 const path = require('node:path');
+const { handoffDate, handoffReason } = require('./policy.js');
 
 function openStore(filename) {
   if (filename !== ':memory:') mkdirSync(path.dirname(filename), { recursive: true, mode: 0o700 });
@@ -95,7 +96,7 @@ function openStore(filename) {
           .run(decision.status,decision.pathway,decision.due,decision.nextAction,result.read ? JSON.stringify(result.read) : null,result.model || null,result.mode || null,JSON.stringify(decision.problems),now,id);
         event(id,'read_completed',result.mode === 'recorded' ? 'Used the recorded sample read; no model API call.' : result.model ? `Live read returned by ${result.model}.` : 'No usable structured read was returned.',now);
         event(id,decision.problems.length ? 'validation_held' : 'validation_passed',decision.problems.join(' ') || 'Required evidence matches the source; extracted dates and BI-RADS agree with their quotes.',now);
-        event(id,'pathway_selected',`Pathway: ${decision.pathway}. State: ${decision.status}.` + (decision.due ? ` Due: ${decision.due}.` : ''),now);
+        event(id,'pathway_selected',`Pathway: ${decision.pathway}. State: ${decision.status}.` + (decision.due ? ` Due: ${decision.due}.` : '') + (decision.handoff ? ` Goes to a navigator on ${decision.handoff} if still not booked.` : ''),now);
         if (decision.review) addReview(id,'hold',decision.review,now);
         if (decision.headsUp) addReview(id,'heads_up','BI-RADS 5: navigator heads-up. Booking outreach continues.',now);
         if (decision.message) addMessage(id,decision.message,now);
@@ -121,12 +122,15 @@ function openStore(filename) {
     },
     sendDue(now, today = now.slice(0,10)) {
       transaction(() => {
-        for (const row of db.prepare("SELECT id,due FROM cases WHERE status='waiting_reminder' AND next_action<=?").all(today)) {
-          const A = require('../agent/agent.js');
-          if (today >= A.addMonths(row.due,1)) {
+        for (const row of db.prepare("SELECT id,status,pathway,due,next_action,read_json FROM cases WHERE status IN ('waiting_reminder','awaiting_booking')").all()) {
+          let exam = null;
+          try { exam = JSON.parse(row.read_json).exam_date; } catch {}
+          const handoff = handoffDate(row.pathway, exam);
+          // Bookings are not confirmed yet, so a case still open at its deadline always goes to a person.
+          if (!handoff || today >= handoff) {
             db.prepare("UPDATE cases SET status='needs_review',updated_at=? WHERE id=?").run(now,row.id);
-            addReview(row.id,'hold','Six-month follow-up is at least one month overdue. Navigator review is required.',now);
-          } else {
+            addReview(row.id,'hold',handoffReason(row.pathway),now);
+          } else if (row.status === 'waiting_reminder' && row.next_action <= today) {
             addMessage(row.id,`Your six-month follow-up imaging is due ${row.due}. Use the test booking inbox or ask for help.`,now);
             db.prepare("UPDATE cases SET status='awaiting_booking',updated_at=? WHERE id=?").run(now,row.id);
           }

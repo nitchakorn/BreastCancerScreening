@@ -126,6 +126,46 @@ test('six-month initial reminder fires once when its date arrives',async t=>{
   assert.equal(item.messages.length,1);
 });
 
+test('an unbooked biopsy goes to a navigator on day 7 and diagnostic imaging on day 30, once each',async t=>{
+  let now=date;
+  const {app,base}=await fixture(t,{clock:()=>now});
+  const dx=(await (await submit(base,samples[0].text)).json()).case.id;
+  await app.runOnce();
+  const bx=(await (await submit(base,samples[2].text)).json()).case.id;
+  await app.runOnce();
+  assert(app.store.get(bx).events.some(e=>e.detail.includes('Goes to a navigator on 2026-10-30')));
+  now='2026-10-29T12:00:00.000Z'; await app.runOnce();
+  assert.equal(app.store.get(bx).status,'awaiting_booking');
+  now='2026-10-30T12:00:00.000Z'; await app.runOnce();
+  let item=app.store.get(bx);
+  assert.equal(item.status,'needs_review');
+  assert.match(item.reviews.find(r=>r.kind==='hold').reason,/within 7 days/);
+  assert.equal(app.store.get(dx).status,'awaiting_booking');
+  now='2026-11-22T12:00:00.000Z'; await app.runOnce(); await app.runOnce();
+  item=app.store.get(dx);
+  assert.equal(item.status,'needs_review');
+  assert.equal(item.reviews.length,1);
+  assert.match(item.reviews[0].reason,/within 30 days/);
+  assert.equal(item.messages.length,1);
+  assert.equal(app.store.get(bx).reviews.length,1);
+});
+
+test('a reminded six-month case that never books goes to a navigator one month after it is due',async t=>{
+  let now=date;
+  const {app,base}=await fixture(t,{clock:()=>now});
+  const id=(await (await submit(base,samples[4].text)).json()).case.id;
+  await app.runOnce();
+  now='2027-03-23T12:00:00.000Z'; await app.runOnce();
+  assert.equal(app.store.get(id).status,'awaiting_booking');
+  now='2027-05-22T12:00:00.000Z'; await app.runOnce();
+  assert.equal(app.store.get(id).status,'awaiting_booking');
+  now='2027-05-23T12:00:00.000Z'; await app.runOnce();
+  const item=app.store.get(id);
+  assert.equal(item.status,'needs_review');
+  assert.match(item.reviews[0].reason,/one month overdue/);
+  assert.equal(item.messages.length,1);
+});
+
 test('sample exam dates follow the configured local date across UTC midnight',async t=>{
   const {base}=await fixture(t,{clock:()=> '2026-10-23T01:00:00.000Z',timeZone:'America/New_York'});
   const data=await (await fetch(base+'/api/examples')).json();

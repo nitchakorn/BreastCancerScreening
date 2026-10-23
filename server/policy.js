@@ -1,4 +1,21 @@
 const A = require('../agent/agent.js');
+const R = A.RULES;
+
+// The day an unbooked case goes to a navigator. Same thresholds as the simulation in agent.js.
+function handoffDate(pathway, exam) {
+  if (!validDate(exam)) return null;
+  if (pathway === 'diagnostic' || pathway === 'biopsy') return A.addDays(exam, R[pathway].personIfNotBookedByDay);
+  if (pathway === 'shortInterval') return A.addMonths(A.addMonths(exam, R.shortInterval.dueMonths), R.shortInterval.personMonthsAfterDue);
+  return null;
+}
+
+function handoffReason(pathway) {
+  if (pathway === 'shortInterval') return 'Six-month follow-up is at least one month overdue. Navigator review is required.';
+  if (pathway === 'diagnostic' || pathway === 'biopsy') {
+    return `${pathway === 'biopsy' ? 'Biopsy' : 'Diagnostic imaging'} not booked within ${R[pathway].personIfNotBookedByDay} days of the report. Navigator review is required.`;
+  }
+  return 'The follow-up deadline could not be worked out. Navigator review is required.';
+}
 
 function validDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -54,15 +71,15 @@ function decide(text, read, now) {
   const category = A.normBirads(read.birads), pathway = A.pathwayFor(category), exam = read.exam_date;
   if (!pathway) { problems.push('This BI-RADS category has no automated pathway.'); return hold(); }
   if (pathway === 'routine') return { status: 'closed', pathway, due: A.addMonths(exam, 12), nextAction: null, problems, review: null, message: null };
-  const due = pathway === 'shortInterval' ? A.addMonths(exam, 6) : A.addDays(exam, 14);
-  const personDate = pathway === 'shortInterval' ? A.addMonths(due, 1) : A.addDays(exam, pathway === 'biopsy' ? 7 : 30);
-  if (now >= personDate) {
+  const due = pathway === 'shortInterval' ? A.addMonths(exam, R.shortInterval.dueMonths) : A.addDays(exam, R[pathway].dueDays);
+  const handoff = handoffDate(pathway, exam);
+  if (!handoff || now >= handoff) {
     problems.push('The report is already beyond the unbooked handoff threshold. Navigator review is required.');
     return { ...hold(), pathway, due };
   }
-  const nextAction = pathway === 'shortInterval' ? A.addMonths(due, -1) : now;
+  const nextAction = pathway === 'shortInterval' ? A.addMonths(due, -R.shortInterval.outreachMonthsBefore) : now;
   return {
-    status: nextAction > now ? 'waiting_reminder' : 'awaiting_booking', pathway, due, nextAction,
+    status: nextAction > now ? 'waiting_reminder' : 'awaiting_booking', pathway, due, nextAction, handoff,
     problems, review: null, headsUp: category === '5',
     message: nextAction > now ? null : pathway === 'biopsy'
       ? 'Your care team asked us to help schedule the follow-up appointment they discussed with you. Use the test booking inbox or ask for help.'
@@ -72,4 +89,4 @@ function decide(text, read, now) {
   };
 }
 
-module.exports = { decide, validDate };
+module.exports = { decide, validDate, handoffDate, handoffReason };
