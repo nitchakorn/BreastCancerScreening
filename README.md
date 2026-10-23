@@ -10,52 +10,80 @@ This is a demo with synthetic patients. It sends no real messages, books nothing
 
 ## Local agent workspace
 
-The local workspace adds report intake, a background reader, SQLite case storage, rule validation, a human review queue, an action history and an in-app test inbox. The original nine-patient simulation and workflow flowchart remain available from the workspace header.
+The workspace runs the same agent on cases you create. Give it a report and it follows up the way the simulation does: a text, a portal message and an automated call, replies read by Claude, bookings, a reminder the day before, and the next report until the result is resolved. People step in through the same handoffs. A demo clock moves time forward, so a month of follow-up takes a few clicks.
 
-You need **Node.js 24.5 or newer**. All server and test code uses Node's built-in modules; there are no npm dependencies to install.
+The workspace and the simulation share one engine (`createEngine` in `agent/agent.js`). A test replays all nine simulated patients through the workspace and checks that the agent makes the same decisions, 106 of them, on the same days.
+
+You need Node.js 22.22 or newer (24.5 or newer also works). There are no npm packages to install.
 
 ```sh
 npm start
 ```
 
-Open the local address printed by the server, normally `http://127.0.0.1:3000`. Start with **Try a sample**, then choose **Read report & start case**. You can also save a sample as a `.txt` file and upload it. The server binds to loopback; this milestone is a local synthetic-data workspace without authentication.
+Open `http://127.0.0.1:3000`. The server only listens on your own computer and has no login, so use synthetic data only.
+
+### A three-minute demo
+
+1. Pick **Diagnostic imaging** under Try a sample and choose **Read report & start case**. Claude's read is checked, the pathway is set and the first text goes to the test inbox. **Coming up** shows the agent's plan: a portal message on day 2, a call on day 4, and a navigator on day 5 if she never answers.
+2. Choose **+1 day**. Under the test inbox, pick the sample reply **Has no ride** and send it. Claude labels it, code checks the quote, and the agent offers a free ride.
+3. Under **Test schedule**, choose **She booked online**. The agent sees the booking. Move the clock: it texts a reminder the day before, then marks the appointment done and watches for the report.
+4. Under **Reports**, add **Diagnostic result: benign (BI-RADS 2)**. The case closes and shows how many days it took.
+5. Start a **Biopsy pathway** case and send the reply **Scared, asks for a call**. The case goes to the nurse navigator, who can book for her, hand the case back to the agent, or close it with a note.
+6. Start **Conflicting findings**. It is held for a radiologist. Add the **Radiologist addendum** as the next report and the agent picks the case back up.
+
+**Start over** clears every case and resets the clock.
+
+### What the workspace does
+
+| You do | The agent does |
+| --- | --- |
+| Start a case with a report | Claude reads it, code checks every quote, and the rules set the pathway, the due date and the day a person takes over |
+| Move the clock | Runs its daily check for every day in between: texts, portal messages, calls, check-ins, reminders, overdue notes and handoffs |
+| Reply as the patient | Claude labels the reply and quotes it, and code checks the quote. No ride gets a ride offer, another time gets open slots, and a booking claim gets checked against the schedule. Fear, medical questions, refusals, wrong numbers and unclear replies go to the navigator |
+| Book in the test schedule | Trusts the schedule over what she says, texts a reminder the day before, and marks the appointment done on the day |
+| Add the next report | Reads and checks it like the first one. A result can close the case, start a biopsy pathway or release a radiologist hold |
+| Act as the navigator or radiologist | Hand the case back to the agent, book for her, confirm that benign pathology matches the imaging, or close the case with a note |
+
+Two watches exist only in the workspace, because in the simulation the report always arrives on time. The agent hands the case to a navigator if the imaging report is not in 3 days after the appointment, or if pathology is not in 10 days after the biopsy.
 
 ### Recorded mode: no key required
 
-With no API key configured, the workspace uses **recorded mode**, clearly identified in the banner and each case's action history. It recognizes the eight bundled synthetic reports, with their exam/procedure date adjusted to today. It does not read arbitrary new reports or call a model. Altered or unknown reports fail explicitly; they never silently use a different sample's answer.
+With no API key, the workspace uses **recorded mode**. Claude's reads of the bundled reports and replies were recorded earlier with Claude Code (see `reads/`). Sample reports get their dates moved to the demo clock, and recorded mode moves the dates in the recorded read the same way. Any other text fails openly and can be retried in live mode. It never borrows another sample's answer.
 
-Try **Diagnostic imaging** to create a case due in 14 days and a test-inbox message. **Routine screening** closes without outreach. **Conflicting findings** creates a review task without sending a patient message. **BI-RADS 5** adds a navigator heads-up while outreach continues. Pathology always goes to human review in this milestone. Six-month cases wait until one month before their due date for the initial message. Bookings can't be confirmed yet in this milestone, so a case that is still waiting for a booking goes to a navigator at its deadline: 7 days after the report for a biopsy, 30 days for diagnostic imaging, and one month after the due date for six-month imaging.
+### Live mode
 
-Cases, messages, review tasks and events are stored in `.local/cases.sqlite`, which is excluded from Git. Duplicate submissions with the same patient label and report reuse the case. The initial local message is committed atomically with the case decision and has a unique delivery key. Restarting resumes interrupted reads without duplicating that message. An interrupted live model call may be repeated; local delivery deduplication does not imply model-call billing is exactly once.
+Keep credentials in a local `.env` file, never in Git or chat. Copy `.env.example` to `.env`, set `READER_MODE=live` and `ANTHROPIC_API_KEY`, and restart. Leave `ANTHROPIC_MODEL` blank to use an available Sonnet model. Reports and replies go to the Claude API with a forced tool call (`record_report` or `record_reply`), and their text is treated as source material, never as instructions. Code checks every read before the agent acts. A failed API call keeps the item with a **Retry** button. An unusable answer goes to a person.
 
-Sample dates and deadline checks use `APP_TIME_ZONE` (default `America/New_York`). Event timestamps are stored in UTC and displayed in the browser's local time.
+### Saved data
 
-### Enable live Claude reading later
+Cases, reports, replies, messages, handoffs and events are stored in `.local/cases.sqlite`, which Git ignores. Each change is one transaction: the agent's state, its messages and its handoffs are saved together, so a restart never sends a message twice. A database from milestone 1 is kept under a new name and a fresh one starts. Dates follow `APP_TIME_ZONE` (default `America/New_York`).
 
-Keep credentials in environment settings or a local `.env` file, never in Git or chat. To use a local file, copy `.env.example` to `.env`, set `READER_MODE=live` and set `ANTHROPIC_API_KEY` securely. Restart the server afterward. You can leave `ANTHROPIC_MODEL` blank to discover an available Sonnet model from your API account, or choose an available model ID explicitly. To force recorded mode even when a key is present, set `READER_MODE=recorded`.
-
-Live mode calls `api.anthropic.com` using the existing report prompt and a structured `record_report` tool. Code checks the supporting quotes, category and date before selecting an action. A failed API request retains the case with a **Retry report read** action. An unusable structured answer enters human review. The API key stays on the server. In the managed cloud environment, the start command preserves the configured proxy and CA verification.
-
-This first milestone stops at **report → read → saved pathway → initial test message or review → navigator handoff if still unbooked at the deadline**. Reply processing, confirmed bookings, repeat outreach and external messaging integrations are future work. Recorded-mode readiness does not establish that live API access works.
-
-### Validate and demonstrate
+### Tests
 
 ```sh
-npm test            # HTTP workflow, SQLite persistence, duplicates, policy failures and mocked provider errors
-npm run check       # original nine-patient simulation
-npm run build       # original standalone dashboard and embedded workflow
+npm test            # everything below, with no model calls
+npm run check       # print the nine-patient simulation
+npm run build       # rebuild docs/index.html
 ```
 
-For a short demonstration: submit the diagnostic sample, inspect its evidence and inbox, submit it again to show deduplication, restart the server to show persistence, then submit the conflicting sample to show human review. The automated provider tests use test doubles and do not call Anthropic. A live demonstration requires enabling and checking live mode separately.
+| Test | What it proves |
+| --- | --- |
+| `test/simulation.test.js` | The simulation prints exactly the saved timelines and summary |
+| `test/parity.test.js` | The workspace makes the same decisions on the same days as the simulation, for all nine patients |
+| `test/loop.test.js` | Outreach, replies, bookings, results, people's actions and the demo clock, through the HTTP API |
+| `test/workflow.test.js` | Intake, duplicates, restarts, retries and request checks |
+| `test/policy.test.js` | A bad read is held for a person instead of messaging her |
+| `test/reader.test.js` | Recorded and live reading, with the API mocked |
 
 | Path | Purpose |
 | --- | --- |
-| `server/reader.js` | Explicit recorded mode and live Anthropic adapter |
-| `server/policy.js` | Validation and initial action selection using the existing pathway rules |
-| `server/store.js` | SQLite records, atomic inbox delivery, recovery and event history |
-| `server/app.js` | HTTP API and background case worker |
-| `app/` | Local workspace interface |
-| `test/` | Tests with no model charges |
+| `server/app.js` | HTTP API, demo clock and background reader |
+| `server/loop.js` | Runs the shared engine for saved cases, one day at a time |
+| `server/policy.js` | Checks every read and works out what the page shows |
+| `server/store.js` | SQLite records, one transaction per change |
+| `server/reader.js` | Recorded mode and the live Claude API reader |
+| `server/samples.js` | Sample reports and replies, dated to the demo clock |
+| `app/` | The workspace page |
 
 ## How it works
 
@@ -132,7 +160,9 @@ No API key is stored in this repo. The page replays the recorded reads in `reads
 | `data/patients.json` | The patients, and how the simulated world reacts to the agent |
 | `prompts/` | The two prompts Claude gets: one for documents, one for replies |
 | `reads/` | What Claude returned in the recorded run |
-| `agent/agent.js` | The rules and the day-by-day simulation |
+| `agent/agent.js` | The rules, the engine and the day-by-day simulation |
+| `server/`, `app/` | The local workspace |
+| `test/` | Tests, including the simulation's saved output in `test/fixtures/` |
 | `scripts/` | Reading, checking and building |
 | `site/template.html` | The page template |
 | `docs/index.html` | The built page |

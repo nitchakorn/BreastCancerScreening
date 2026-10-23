@@ -51,3 +51,24 @@ test('missing tool output or truncated output is rejected instead of treated as 
     await assert.rejects(reader.read(sample.text),e=>e.code==='invalid_output');
   }
 });
+
+test('live reply reading uses the reply prompt and a forced record_reply tool limited to the known labels',async()=>{
+  const calls=[];
+  const reader=createReader({env:{READER_MODE:'live',ANTHROPIC_API_KEY:'test-key',ANTHROPIC_MODEL:'test'},fetchImpl:async(url,options)=>{
+    calls.push(JSON.parse(options.body));
+    return response({model:'test',stop_reason:'tool_use',content:[{type:'tool_use',name:'record_reply',input:{labels:['transport_barrier'],quote:'no ride',summary:'She has no ride.'}}]});
+  }});
+  const result=await reader.readReply('I have no ride this week.');
+  assert.deepEqual(result.read.labels,['transport_barrier']);
+  assert.equal(calls[0].tool_choice.name,'record_reply');
+  assert.match(calls[0].system,/patient's text-message reply/);
+  assert.match(calls[0].system,/untrusted source material/);
+  assert(calls[0].tools[0].input_schema.properties.labels.items.enum.includes('declines_care'));
+});
+
+test('recorded mode reads the bundled replies and refuses any other text',async()=>{
+  const reader=createReader({env:{}});
+  const known=await reader.readReply("I want to come but I don't drive and my son works all day. I have no way to get there.");
+  assert.deepEqual(known.read.labels,['transport_barrier']);
+  await assert.rejects(reader.readReply('Can I come next week?'),e=>e.code==='unsupported_sample');
+});

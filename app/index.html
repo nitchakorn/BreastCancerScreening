@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="A local agent workspace for synthetic reports, recorded or live Claude reads, saved cases and a test inbox.">
+  <meta name="description" content="A local agent workspace for synthetic breast imaging follow-up: report reads, outreach, replies, bookings, results and human handoffs.">
   <title>Agent workspace · Breast screening follow-up</title>
   <link rel="stylesheet" href="/app.css">
   <script src="/app.js" defer></script>
@@ -11,42 +11,117 @@
 <body>
   <main>
     <header class="page-header">
-      <div><p class="eyebrow">Breast screening follow-up · Synthetic data only</p><h1>Agent workspace</h1><p class="lede">A new report becomes a checked read, a saved case and a next step.</p></div>
+      <div><p class="eyebrow">Breast screening follow-up · Synthetic data only</p><h1>Agent workspace</h1><p class="lede">Give the agent a report and watch it follow up until the result is resolved.</p></div>
       <a class="button secondary" href="/simulation#workflow">View simulation &amp; workflow</a>
     </header>
-    <div class="milestone" aria-label="Current milestone"><span>01 Upload report</span><span>02 Read &amp; validate</span><span>03 Save pathway</span><span>04 Test inbox</span></div>
+    <div class="milestone" aria-label="The loop"><span>01 Read &amp; check the report</span><span>02 Text, portal, call &amp; replies</span><span>03 Booking &amp; appointment</span><span>04 Result closes the loop</span></div>
     <div id="connection" class="notice" role="status">Checking the local agent…</div>
+    <section class="card clock" aria-labelledby="clock-title">
+      <div>
+        <p class="eyebrow" id="clock-title">Demo clock</p>
+        <p class="clock-date" id="clock-date">…</p>
+        <p class="muted small" id="clock-note">The agent checks every open case once a day. Move the clock forward to see what it does next.</p>
+      </div>
+      <div class="clock-buttons">
+        <button type="button" class="secondary" id="clock-day">+1 day</button>
+        <button type="button" class="secondary" id="clock-week">+1 week</button>
+        <button type="button" class="secondary quiet" id="reset">Start over</button>
+      </div>
+      <p id="clock-error" class="error" role="alert" hidden></p>
+    </section>
     <div class="workspace">
-      <section class="card intake" aria-labelledby="intake-title">
-        <p class="eyebrow">Start a case</p><h2 id="intake-title">Give the agent a report</h2>
-        <p class="muted">Use a synthetic report. Messages stay in this app’s test inbox.</p>
-        <form id="intake-form">
-          <label for="patient">Synthetic patient label</label>
-          <input id="patient" name="patient" maxlength="100" value="Demo patient" required>
-          <div class="field-heading"><label for="example">Try a sample</label><span class="muted">Exam date uses today</span></div>
-          <select id="example"><option value="">Choose a synthetic report…</option></select>
-          <label for="report-file">Or upload a text report</label>
-          <input id="report-file" type="file" accept=".txt,text/plain">
-          <label for="report">Report text</label>
-          <textarea id="report" name="report" rows="13" minlength="30" maxlength="20000" placeholder="Paste a synthetic imaging or pathology report…" required></textarea>
-          <button type="submit" id="submit">Read report &amp; start case</button>
-          <p class="muted small" id="reader-note">Recorded mode uses the bundled samples without an API call. Live mode uses your Claude API account. Cases are saved before reading.</p>
-          <p id="form-status" role="status"></p>
-          <p id="form-error" class="error" role="alert" hidden></p>
-        </form>
-      </section>
-      <div class="case-column">
+      <div class="side-column">
+        <section class="card intake" aria-labelledby="intake-title">
+          <p class="eyebrow">Start a case</p><h2 id="intake-title">Give the agent a report</h2>
+          <p class="muted">Use a synthetic report. Messages stay in this app’s test inbox.</p>
+          <form id="intake-form">
+            <label for="patient">Synthetic patient label</label>
+            <input id="patient" name="patient" maxlength="100" value="Grace T." required>
+            <div class="field-heading"><label for="example">Try a sample</label><span class="muted">Exam date uses today</span></div>
+            <select id="example"><option value="">Choose a synthetic report…</option></select>
+            <label for="report-file">Or upload a text report</label>
+            <input id="report-file" type="file" accept=".txt,text/plain">
+            <label for="report">Report text</label>
+            <textarea id="report" name="report" rows="10" minlength="30" maxlength="20000" placeholder="Paste a synthetic imaging or pathology report…" required></textarea>
+            <button type="submit" id="submit">Read report &amp; start case</button>
+            <p class="muted small">Recorded mode uses the bundled samples without an API call. Live mode uses your Claude API account. Cases are saved before reading. Test messages use the first name in the label.</p>
+            <p id="form-status" role="status"></p>
+            <p id="form-error" class="error" role="alert" hidden></p>
+          </form>
+        </section>
         <section class="card" aria-labelledby="cases-title">
           <div class="section-heading"><div><p class="eyebrow">Persistent case records</p><h2 id="cases-title">Your cases</h2></div><button class="secondary compact" id="refresh" type="button">Refresh</button></div>
           <div id="cases" class="case-list"><p class="empty">No cases yet. Start with a sample report.</p></div>
         </section>
-        <section class="card" aria-labelledby="detail-title">
-          <div class="section-heading"><h2 id="detail-title">Case activity</h2><span id="case-state" class="badge" hidden></span></div>
-          <div id="detail"><p class="empty">Choose a case to see the model’s evidence, the rule decision and the test message.</p></div>
-        </section>
       </div>
+
+      <section class="card detail-card" aria-labelledby="detail-title">
+        <div class="section-heading"><h2 id="detail-title">Case activity</h2><span id="case-state" class="badge" hidden></span></div>
+        <p class="empty" id="detail-empty">Choose a case to see the agent’s plan, the test inbox, the schedule and every report.</p>
+        <div id="detail" hidden>
+          <dl id="facts" class="facts"></dl>
+          <p id="inputs-pending" class="pending" hidden></p>
+
+          <div id="person" class="person" hidden>
+            <p class="eyebrow" id="person-who"></p>
+            <p id="person-reason"></p>
+            <div class="person-actions">
+              <button type="button" id="resume" class="secondary compact" hidden>Hand back to the agent</button>
+              <button type="button" id="concordant" class="compact" hidden>Confirm it matches the imaging</button>
+              <span class="muted small" id="person-hint"></span>
+            </div>
+            <form id="close-form" class="inline-form">
+              <label for="close-note">Close the case instead</label>
+              <div class="row"><input id="close-note" maxlength="500" placeholder="Why, in a few words. For example: getting care at another hospital."><button type="submit" class="secondary compact">Close case</button></div>
+            </form>
+            <p id="person-error" class="error" role="alert" hidden></p>
+          </div>
+
+          <div class="case-section">
+            <h3>Coming up</h3>
+            <ol id="coming" class="coming"></ol>
+          </div>
+
+          <div class="case-section">
+            <h3>Test inbox</h3>
+            <div id="thread" class="thread"></div>
+            <form id="reply-form" class="inline-form">
+              <div class="field-heading"><label for="reply-text">Reply as the patient</label><select id="reply-example" aria-label="Sample replies"><option value="">Sample replies…</option></select></div>
+              <textarea id="reply-text" rows="2" maxlength="1000" placeholder="For example: I don't have a ride."></textarea>
+              <div class="row"><button type="submit" class="compact" id="reply-send">Send reply</button><span class="muted small">Claude reads it. Code checks the quote and decides.</span></div>
+              <p id="reply-error" class="error" role="alert" hidden></p>
+            </form>
+          </div>
+
+          <div class="case-section">
+            <h3>Test schedule</h3>
+            <p id="schedule-state" class="muted"></p>
+            <form id="book-form" class="inline-form">
+              <label for="book-date">Appointment date</label>
+              <div class="row"><input id="book-date" type="date"><button type="submit" class="compact" data-by="patient">She booked online</button><button type="submit" class="secondary compact" data-by="navigator">Navigator booked for her</button></div>
+              <p id="book-error" class="error" role="alert" hidden></p>
+            </form>
+          </div>
+
+          <div class="case-section">
+            <h3>Reports</h3>
+            <div id="reports" class="reports"></div>
+            <form id="report-form" class="inline-form">
+              <div class="field-heading"><label for="next-text">Add the next report</label><select id="next-example" aria-label="Sample follow-up reports"><option value="">Sample results…</option></select></div>
+              <textarea id="next-text" rows="5" maxlength="20000" placeholder="A diagnostic result, a corrected report or pathology…"></textarea>
+              <div class="row"><button type="submit" class="compact" id="next-send">Add report</button><span class="muted small">It joins this case. A corrected report releases a radiologist hold.</span></div>
+              <p id="next-error" class="error" role="alert" hidden></p>
+            </form>
+          </div>
+
+          <div class="case-section">
+            <h3>Action history <span class="muted small">newest first</span></h3>
+            <ol id="timeline" class="timeline"></ol>
+          </div>
+        </div>
+      </section>
     </div>
-    <footer><p>Milestone 1: report intake, recorded or live extraction, validation, persistent cases, initial test messages and a navigator handoff when a case is still unbooked at its deadline. Patient replies, booking confirmation and the full reminder sequence are the next milestone.</p><p>Not for clinical use. No real patient messages, bookings or EHR writes. This local workspace has no user authentication.</p></footer>
+    <footer><p>The workspace runs the same engine as the simulation (agent/agent.js), and a test replays all nine simulated patients through it to check that the agent makes the same decisions on the same days.</p><p>Not for clinical use. No real patient messages, bookings or EHR writes. This local workspace has no user authentication.</p></footer>
   </main>
 </body>
 </html>
