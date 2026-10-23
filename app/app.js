@@ -71,7 +71,37 @@
     if (!item.step) return 'Waiting for a checked read';
     return `${item.step}${item.due ? ' · due ' + fmt(item.due) : ''}`;
   }
+  // The dashboard line: where every case stands, and how fast abnormal results get resolved.
+  function renderSummary(cases) {
+    const box = $('summary'); box.replaceChildren();
+    box.hidden = !cases.length;
+    const count = test => cases.filter(test).length;
+    const abnormal = cases.filter(c => ['0', '4-5', 'unclear'].includes(c.category));
+    const days = abnormal.filter(c => c.resolvedDays !== null).map(c => c.resolvedDays).sort((a, b) => a - b);
+    const median = days.length ? (days.length % 2 ? days[(days.length - 1) / 2] : (days[days.length / 2 - 1] + days[days.length / 2]) / 2) : null;
+    const items = [
+      ['Needs a person', count(c => c.status === 'needs_review'), 'review'],
+      ['Overdue', count(c => c.overdueDays > 0 && c.status !== 'closed'), 'late'],
+      ['Agent following up', count(c => ['awaiting_booking', 'waiting_reminder'].includes(c.status)), ''],
+      ['Booked or awaiting result', count(c => ['booked', 'awaiting_result'].includes(c.status)), ''],
+      ['Closed', count(c => c.status === 'closed'), ''],
+      ['Abnormal results resolved', abnormal.length ? `${days.length} of ${abnormal.length}${median !== null ? ` · median ${median} days` : ''}` : '–', '']
+    ];
+    for (const [label, value, tone] of items) {
+      const div = element('div', undefined, tone && value ? 'stat ' + tone : 'stat');
+      div.append(element('dt', label), element('dd', String(value)));
+      box.append(div);
+    }
+  }
+  // People first, then the most overdue, then what the agent does next. Closed cases last.
+  function worklistOrder(cases) {
+    const rank = c => c.status === 'needs_review' ? 0 : c.status === 'read_failed' ? 1 : c.status === 'closed' ? 4 : c.overdueDays > 0 ? 2 : 3;
+    return [...cases].sort((a, b) => rank(a) - rank(b) || b.overdueDays - a.overdueDays
+      || String(a.nextAction || '9999').localeCompare(String(b.nextAction || '9999')) || b.createdAt.localeCompare(a.createdAt));
+  }
   function renderList(cases) {
+    renderSummary(cases);
+    cases = worklistOrder(cases);
     const list = $('cases'); list.replaceChildren();
     if (!cases.length) list.append(element('p', 'No cases yet. Start with a sample report.', 'empty'));
     for (const item of cases) {

@@ -46,7 +46,12 @@ input,select,textarea { margin-bottom:8px; }
 .side-column { display:grid; gap:22px; min-width:0; }
 .section-heading { margin-bottom:18px; }
 .empty { padding:12px 0; font-size:14px; }
-.case-list { display:grid; gap:8px; max-height:290px; overflow:auto; }
+.case-list { display:grid; gap:8px; max-height:420px; overflow:auto; }
+.summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; margin:0 0 14px; border:1px solid var(--line); background:var(--line); border-radius:8px; overflow:hidden; }
+.summary .stat { background:var(--surface); padding:8px 10px; }
+.summary dt { font-size:11px; color:var(--muted); }
+.summary dd { margin:2px 0 0; font-weight:700; font-variant-numeric:tabular-nums; }
+.summary .stat.review dd, .summary .stat.late dd { color:var(--warn); }
 .case-row { display:flex; justify-content:space-between; align-items:center; gap:12px; width:100%; text-align:left; background:var(--surface); border-color:var(--line); color:var(--ink); font-weight:500; }
 .case-row[aria-pressed=true] { border-color:var(--accent); background:var(--soft); }
 .case-row > span:first-child { min-width:0; overflow-wrap:anywhere; }
@@ -122,7 +127,7 @@ mark.warn { background:var(--warn-bg); color:var(--warn); }
 .actor.person { background:var(--warn-bg); color:var(--warn); }
 @media(prefers-color-scheme:dark) { .actor.patient { background:#1d2c42; color:#a9c6f0; } .ok { color:#7fc79a; } }
 @media(max-width:850px) { .workspace { grid-template-columns:1fr; } .page-header { flex-direction:column; } .page-header .button { margin:0; } }
-@media(max-width:480px) { main { padding:24px 14px; } .card { padding:18px; } .milestone { grid-template-columns:repeat(2,1fr); } .case-row { align-items:flex-start; } .section-heading { flex-wrap:wrap; } .bubble { max-width:100%; } .coming li { grid-template-columns:1fr; gap:0; } .inline-form select { max-width:100%; } .field-heading { flex-wrap:wrap; } }
+@media(max-width:480px) { .summary { grid-template-columns:repeat(2,minmax(0,1fr)); } main { padding:24px 14px; } .card { padding:18px; } .milestone { grid-template-columns:repeat(2,1fr); } .case-row { align-items:flex-start; } .section-heading { flex-wrap:wrap; } .bubble { max-width:100%; } .coming li { grid-template-columns:1fr; gap:0; } .inline-form select { max-width:100%; } .field-heading { flex-wrap:wrap; } }
 </style>
   </head>
 <body>
@@ -167,7 +172,8 @@ mark.warn { background:var(--warn-bg); color:var(--warn); }
           </form>
         </section>
         <section class="card" aria-labelledby="cases-title">
-          <div class="section-heading"><div><p class="eyebrow">Persistent case records</p><h2 id="cases-title">Your cases</h2></div><button class="secondary compact" id="refresh" type="button">Refresh</button></div>
+          <div class="section-heading"><div><p class="eyebrow">Worklist · people first, then most overdue</p><h2 id="cases-title">Your cases</h2></div><button class="secondary compact" id="refresh" type="button">Refresh</button></div>
+          <dl id="summary" class="summary" hidden></dl>
           <div id="cases" class="case-list"><p class="empty">No cases yet. Start with a sample report.</p></div>
         </section>
       </div>
@@ -1195,7 +1201,7 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
       return db.prepare('SELECT id,patient,status,pathway,due,next_action,state_json,last_day,created_at,updated_at FROM cases ORDER BY created_at DESC,rowid DESC').all().map(row => {
         const c = json(row.state_json), day = today || (row.last_day !== null ? A.dateOf(row.last_day) : null), view = day ? agentView(c, day) : null;
         return { id: row.id, patient: row.patient, status: row.status, pathway: row.pathway, due: row.due, nextAction: row.next_action,
-          step: view ? view.step : null, overdueDays: view ? view.overdueDays : 0, booked: view && view.booked ? view.booked.appt : null,
+          step: view ? view.step : null, category: view ? view.category : null, overdueDays: view ? view.overdueDays : 0, booked: view && view.booked ? view.booked.appt : null,
           person: view && view.person ? view.person.who : null, outcome: view ? view.outcome : null, resolvedDays: view ? view.resolvedDays : null,
           openReviews: db.prepare("SELECT COUNT(*) AS n FROM reviews WHERE case_id=? AND status='open'").get(row.id).n,
           createdAt: row.created_at, updatedAt: row.updated_at };
@@ -1715,7 +1721,37 @@ window.startWorkspaceApp = function () {
     if (!item.step) return 'Waiting for a checked read';
     return `${item.step}${item.due ? ' · due ' + fmt(item.due) : ''}`;
   }
+  // The dashboard line: where every case stands, and how fast abnormal results get resolved.
+  function renderSummary(cases) {
+    const box = $('summary'); box.replaceChildren();
+    box.hidden = !cases.length;
+    const count = test => cases.filter(test).length;
+    const abnormal = cases.filter(c => ['0', '4-5', 'unclear'].includes(c.category));
+    const days = abnormal.filter(c => c.resolvedDays !== null).map(c => c.resolvedDays).sort((a, b) => a - b);
+    const median = days.length ? (days.length % 2 ? days[(days.length - 1) / 2] : (days[days.length / 2 - 1] + days[days.length / 2]) / 2) : null;
+    const items = [
+      ['Needs a person', count(c => c.status === 'needs_review'), 'review'],
+      ['Overdue', count(c => c.overdueDays > 0 && c.status !== 'closed'), 'late'],
+      ['Agent following up', count(c => ['awaiting_booking', 'waiting_reminder'].includes(c.status)), ''],
+      ['Booked or awaiting result', count(c => ['booked', 'awaiting_result'].includes(c.status)), ''],
+      ['Closed', count(c => c.status === 'closed'), ''],
+      ['Abnormal results resolved', abnormal.length ? `${days.length} of ${abnormal.length}${median !== null ? ` · median ${median} days` : ''}` : '–', '']
+    ];
+    for (const [label, value, tone] of items) {
+      const div = element('div', undefined, tone && value ? 'stat ' + tone : 'stat');
+      div.append(element('dt', label), element('dd', String(value)));
+      box.append(div);
+    }
+  }
+  // People first, then the most overdue, then what the agent does next. Closed cases last.
+  function worklistOrder(cases) {
+    const rank = c => c.status === 'needs_review' ? 0 : c.status === 'read_failed' ? 1 : c.status === 'closed' ? 4 : c.overdueDays > 0 ? 2 : 3;
+    return [...cases].sort((a, b) => rank(a) - rank(b) || b.overdueDays - a.overdueDays
+      || String(a.nextAction || '9999').localeCompare(String(b.nextAction || '9999')) || b.createdAt.localeCompare(a.createdAt));
+  }
   function renderList(cases) {
+    renderSummary(cases);
+    cases = worklistOrder(cases);
     const list = $('cases'); list.replaceChildren();
     if (!cases.length) list.append(element('p', 'No cases yet. Start with a sample report.', 'empty'));
     for (const item of cases) {

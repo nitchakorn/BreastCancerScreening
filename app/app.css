@@ -38,7 +38,12 @@ input,select,textarea { margin-bottom:8px; }
 .side-column { display:grid; gap:22px; min-width:0; }
 .section-heading { margin-bottom:18px; }
 .empty { padding:12px 0; font-size:14px; }
-.case-list { display:grid; gap:8px; max-height:290px; overflow:auto; }
+.case-list { display:grid; gap:8px; max-height:420px; overflow:auto; }
+.summary { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:1px; margin:0 0 14px; border:1px solid var(--line); background:var(--line); border-radius:8px; overflow:hidden; }
+.summary .stat { background:var(--surface); padding:8px 10px; }
+.summary dt { font-size:11px; color:var(--muted); }
+.summary dd { margin:2px 0 0; font-weight:700; font-variant-numeric:tabular-nums; }
+.summary .stat.review dd, .summary .stat.late dd { color:var(--warn); }
 .case-row { display:flex; justify-content:space-between; align-items:center; gap:12px; width:100%; text-align:left; background:var(--surface); border-color:var(--line); color:var(--ink); font-weight:500; }
 .case-row[aria-pressed=true] { border-color:var(--accent); background:var(--soft); }
 .case-row > span:first-child { min-width:0; overflow-wrap:anywhere; }
@@ -114,4 +119,4 @@ mark.warn { background:var(--warn-bg); color:var(--warn); }
 .actor.person { background:var(--warn-bg); color:var(--warn); }
 @media(prefers-color-scheme:dark) { .actor.patient { background:#1d2c42; color:#a9c6f0; } .ok { color:#7fc79a; } }
 @media(max-width:850px) { .workspace { grid-template-columns:1fr; } .page-header { flex-direction:column; } .page-header .button { margin:0; } }
-@media(max-width:480px) { main { padding:24px 14px; } .card { padding:18px; } .milestone { grid-template-columns:repeat(2,1fr); } .case-row { align-items:flex-start; } .section-heading { flex-wrap:wrap; } .bubble { max-width:100%; } .coming li { grid-template-columns:1fr; gap:0; } .inline-form select { max-width:100%; } .field-heading { flex-wrap:wrap; } }
+@media(max-width:480px) { .summary { grid-template-columns:repeat(2,minmax(0,1fr)); } main { padding:24px 14px; } .card { padding:18px; } .milestone { grid-template-columns:repeat(2,1fr); } .case-row { align-items:flex-start; } .section-heading { flex-wrap:wrap; } .bubble { max-width:100%; } .coming li { grid-template-columns:1fr; gap:0; } .inline-form select { max-width:100%; } .field-heading { flex-wrap:wrap; } }

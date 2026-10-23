@@ -139,7 +139,7 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
       return db.prepare('SELECT id,patient,status,pathway,due,next_action,state_json,last_day,created_at,updated_at FROM cases ORDER BY created_at DESC,rowid DESC').all().map(row => {
         const c = json(row.state_json), day = today || (row.last_day !== null ? A.dateOf(row.last_day) : null), view = day ? agentView(c, day) : null;
         return { id: row.id, patient: row.patient, status: row.status, pathway: row.pathway, due: row.due, nextAction: row.next_action,
-          step: view ? view.step : null, overdueDays: view ? view.overdueDays : 0, booked: view && view.booked ? view.booked.appt : null,
+          step: view ? view.step : null, category: view ? view.category : null, overdueDays: view ? view.overdueDays : 0, booked: view && view.booked ? view.booked.appt : null,
           person: view && view.person ? view.person.who : null, outcome: view ? view.outcome : null, resolvedDays: view ? view.resolvedDays : null,
           openReviews: db.prepare("SELECT COUNT(*) AS n FROM reviews WHERE case_id=? AND status='open'").get(row.id).n,
           createdAt: row.created_at, updatedAt: row.updated_at };
