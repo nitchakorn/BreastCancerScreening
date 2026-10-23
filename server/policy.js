@@ -1,21 +1,9 @@
 const A = require('../agent/agent.js');
 const R = A.RULES;
 
-// The day an unbooked case goes to a navigator. Same thresholds as the simulation in agent.js.
-function handoffDate(pathway, exam) {
-  if (!validDate(exam)) return null;
-  if (pathway === 'diagnostic' || pathway === 'biopsy') return A.addDays(exam, R[pathway].personIfNotBookedByDay);
-  if (pathway === 'shortInterval') return A.addMonths(A.addMonths(exam, R.shortInterval.dueMonths), R.shortInterval.personMonthsAfterDue);
-  return null;
-}
-
-function handoffReason(pathway) {
-  if (pathway === 'shortInterval') return 'Six-month follow-up is at least one month overdue. Navigator review is required.';
-  if (pathway === 'diagnostic' || pathway === 'biopsy') {
-    return `${pathway === 'biopsy' ? 'Biopsy' : 'Diagnostic imaging'} not booked within ${R[pathway].personIfNotBookedByDay} days of the report. Navigator review is required.`;
-  }
-  return 'The follow-up deadline could not be worked out. Navigator review is required.';
-}
+const DOC_TYPES = ['screening', 'diagnostic', 'ultrasound', 'addendum', 'pathology'];
+const TITLES = { screening: 'Screening mammogram', diagnostic: 'Diagnostic imaging report', ultrasound: 'Ultrasound report', addendum: 'Report addendum', pathology: 'Pathology report' };
+const OUTREACH_STEPS = ['diagnostic', 'biopsy', 'shortInterval'];
 
 function validDate(value) {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -23,13 +11,11 @@ function validDate(value) {
   return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
 }
 
-function decide(text, read, now) {
+// Code checks every structured read before the agent acts on it. Any problem holds the case for a radiologist.
+function checkReport(text, read, now) {
   const problems = [];
-  const hold = () => ({ status: 'needs_review', pathway: 'review', due: null, nextAction: null, problems, review: problems.join(' '), message: null });
-  if (!read || typeof read !== 'object' || Array.isArray(read)) {
-    problems.push('No usable structured report was returned.'); return hold();
-  }
-  if (!['screening', 'diagnostic', 'ultrasound', 'addendum', 'pathology'].includes(read.doc_type)) problems.push('Document type is missing or unsupported.');
+  if (!read || typeof read !== 'object' || Array.isArray(read)) return ['No usable structured report was returned.'];
+  if (!DOC_TYPES.includes(read.doc_type)) problems.push('Document type is missing or unsupported.');
   if (!validDate(read.exam_date)) problems.push('A valid exam or procedure date is required.');
   else if (read.exam_date > now) problems.push('The exam date is in the future and requires review.');
   const quotes = read.quotes;
@@ -60,33 +46,109 @@ function decide(text, read, now) {
     if (!/^(?:[0-6]|4[ABC])$/.test(String(read.birads))) problems.push('A supported BI-RADS value is required.');
     if (read.findings_match_impression !== true) problems.push('The findings and impression require radiologist review.');
   }
-  if (problems.length) return hold();
-  if (read.doc_type === 'pathology') {
-    // These results always enter the human queue; the agent never communicates a result to a patient.
-    problems.push(read.pathology_result === 'malignant' ? 'Pathology requires handoff to breast surgery and the ordering clinician.'
-      : read.pathology_result === 'benign' ? 'A radiologist must confirm imaging–pathology concordance before closure.'
-      : 'A radiologist must decide the next step for this pathology result.');
-    return hold();
-  }
-  const category = A.normBirads(read.birads), pathway = A.pathwayFor(category), exam = read.exam_date;
-  if (!pathway) { problems.push('This BI-RADS category has no automated pathway.'); return hold(); }
-  if (pathway === 'routine') return { status: 'closed', pathway, due: A.addMonths(exam, 12), nextAction: null, problems, review: null, message: null };
-  const due = pathway === 'shortInterval' ? A.addMonths(exam, R.shortInterval.dueMonths) : A.addDays(exam, R[pathway].dueDays);
-  const handoff = handoffDate(pathway, exam);
-  if (!handoff || now >= handoff) {
-    problems.push('The report is already beyond the unbooked handoff threshold. Navigator review is required.');
-    return { ...hold(), pathway, due };
-  }
-  const nextAction = pathway === 'shortInterval' ? A.addMonths(due, -R.shortInterval.outreachMonthsBefore) : now;
+  if (read.doc_type === 'pathology' && !['malignant', 'benign', 'atypia', 'nondiagnostic'].includes(read.pathology_result)) problems.push('A supported pathology result is required.');
+  return problems;
+}
+
+// What the engine needs to know about a report.
+function docFor(report, read) {
+  const type = read && DOC_TYPES.includes(read.doc_type) ? read.doc_type : null;
   return {
-    status: nextAction > now ? 'waiting_reminder' : 'awaiting_booking', pathway, due, nextAction, handoff,
-    problems, review: null, headsUp: category === '5',
-    message: nextAction > now ? null : pathway === 'biopsy'
-      ? 'Your care team asked us to help schedule the follow-up appointment they discussed with you. Use the test booking inbox or ask for help.'
-      : pathway === 'shortInterval'
-        ? `Your six-month follow-up imaging is due ${due}. Use the test booking inbox or ask for help.`
-        : 'Your care team would like you to return for more imaging. Use the test booking inbox or ask for help.'
+    id: report.id, kind: type === 'pathology' ? 'pathology' : type === 'addendum' ? 'addendum' : 'imaging',
+    title: TITLES[type] || 'Report', text: report.text, date: read && validDate(read.exam_date) ? read.exam_date : null
   };
 }
 
-module.exports = { decide, validDate, handoffDate, handoffReason };
+// Test messages greet her by first name when the label looks like one, otherwise "Hi there".
+function firstName(label) {
+  const word = String(label || '').trim().split(/\s+/)[0] || '';
+  return /^[A-Z][a-z'’-]{1,30}$/.test(word) && !/^(demo|synthetic|test|patient|sample)$/i.test(word) ? word : 'there';
+}
+
+// The case state shown in the workspace, worked out from the engine's case.
+function caseStatus(c, today) {
+  if (!c || !c.started) return 'queued';
+  if (c.closed) return 'closed';
+  if (c.person && c.person.kind !== 'surgery') return 'needs_review';
+  if (c.booked) return 'booked';
+  const s = c.step;
+  if (!s || s.kind === 'review') return 'needs_review';
+  if (s.kind === 'pathology' || s.awaitingResult) return 'awaiting_result';
+  if (s.kind === 'shortInterval' && today < s.outreachStart) return 'waiting_reminder';
+  return 'awaiting_booking';
+}
+
+// The day an unbooked case goes to a navigator.
+function handoffDate(c) {
+  const s = c && c.step;
+  if (!s) return null;
+  if (s.kind === 'diagnostic' || s.kind === 'biopsy') return A.dateOf(s.personDay);
+  if (s.kind === 'shortInterval') return s.personDate;
+  return null;
+}
+
+// What the agent plans to do next, in date order. Shown in the workspace so a person can see the plan.
+function comingUp(c, today) {
+  const items = [], s = c && c.step, day = A.dayOf(today);
+  if (!s || !c.started || c.closed) return items;
+  const add = (d, what) => { if (d >= day) items.push({ date: A.dateOf(d), what }); };
+  const label = { text: 'Text her the booking link', portal: 'Send a portal message', call: 'Make an automated call' };
+  if (c.person) return [{ date: today, what: `With the ${c.person.who.toLowerCase()}. The agent waits for them.` }];
+  if (c.booked) {
+    const ad = A.dayOf(c.booked.appt);
+    if (!c.booked.reminded) add(ad - 1, 'Text an appointment reminder');
+    add(ad, c.booked.kind === 'biopsy' ? 'Biopsy appointment' : 'Imaging appointment');
+    return items;
+  }
+  if (s.awaitingResult) { add(s.awaitingResult.personDay, 'Hand to a navigator if the report still is not in'); return items; }
+  if (s.kind === 'pathology') { add(s.personDay, 'Hand to a navigator if pathology still is not in'); return items; }
+  if (s.kind === 'shortInterval') {
+    const start = A.dayOf(s.outreachStart), due = A.dayOf(s.due);
+    if (!s.replied) R.shortInterval.attempts.forEach((a, i) => { if (!s.sent[i]) add(a.fromStart !== undefined ? start + a.fromStart : due + a.fromDue, label[a.channel]); });
+    else add(s.lastContact + R.shortInterval.nudgeEvery, 'Send a check-in text');
+    add(A.dayOf(s.personDate), 'Hand to a navigator if still not booked');
+  } else if (s.plan) {
+    if (!s.replied) {
+      s.plan.forEach(a => { if (!a.done) add(a.day, label[a.channel]); });
+      add(Math.max(s.noAnswerDay, day), 'Hand to a navigator if she has not answered any of the three');
+    } else add(s.lastContact + R.urgent.nudgeEvery, 'Send a check-in text');
+    add(s.personDay, 'Hand to a navigator if still not booked');
+  }
+  return items.sort((a, b) => a.date.localeCompare(b.date)).slice(0, 4);
+}
+
+// Why a booking can't be recorded right now, or null if it can.
+function bookingProblem(c, date, today) {
+  if (!validDate(date)) return 'Choose a valid appointment date.';
+  if (date <= today) return 'Choose a date after today. The agent sends a reminder the day before.';
+  if (date > A.addMonths(today, 12)) return 'Choose a date within the next year.';
+  if (!c || !c.started) return 'The first report has not been read yet.';
+  if (c.closed) return 'This case is closed.';
+  if (c.booked) return `She already has an appointment on ${A.fmt(c.booked.appt)}.`;
+  if (!c.step || !OUTREACH_STEPS.includes(c.step.kind)) return 'There is nothing to book for this case right now.';
+  if (c.step.awaitingResult) return 'Her appointment is done. The agent is waiting for the report.';
+  if (c.person && c.person.kind !== 'exception') return `The ${c.person.who.toLowerCase()} has this case. Booking waits for their decision.`;
+  return null;
+}
+
+// What the agent would do with one report on one day, starting from nothing. Uses the same engine as the workspace.
+function decide(text, read, now) {
+  const events = [], problems = checkReport(text, read, now);
+  const engine = A.createEngine({ log: e => events.push(e), check: () => problems });
+  const c = A.newCase({ id: 'decide', name: 'Patient', first: 'there' });
+  const day = A.dayOf(now), doc = docFor({ id: 'report', text }, read);
+  engine.onDoc(c, doc, read, day);
+  engine.tick(c, day);
+  const status = caseStatus(c, now), handoff = events.filter(e => e.kind === 'handoff').pop();
+  const message = events.find(e => e.actor === 'agent' && ['text', 'portal', 'call'].includes(e.kind));
+  return {
+    status, pathway: problems.length ? 'review' : c.step ? c.step.kind : doc.kind === 'pathology' ? 'pathology' : null,
+    due: c.step ? c.step.due || null : null,
+    nextAction: status === 'waiting_reminder' ? c.step.outreachStart : status === 'awaiting_booking' ? now : null,
+    handoff: handoffDate(c), problems,
+    review: c.person ? (problems.length ? problems.join(' ') + ' ' : '') + handoff.text : null,
+    message: message ? message.text : null, headsUp: events.some(e => e.kind === 'headsup')
+  };
+}
+
+module.exports = { decide, checkReport, docFor, firstName, caseStatus, handoffDate, comingUp, bookingProblem, validDate, OUTREACH_STEPS };

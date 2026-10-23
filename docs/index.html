@@ -481,6 +481,9 @@ Reply with only a JSON object in this shape, no other text:
   comes from data/patients.json. The agent never sees that script. It only sees
   what arrives: reports, replies, bookings and notes from people.
 
+  The same engine (createEngine) also runs the local workspace in server/, where
+  the reports, replies, bookings and people are real clicks instead of a script.
+
   Works in Node (require) and in the browser (window.BreastAgent).
 */
 (function (root) {
@@ -509,6 +512,8 @@ Reply with only a JSON object in this shape, no other text:
       ]
     },
     pathology: { step: "Pathology result", dueDaysAfterBiopsy: 10 },
+    // Workspace only: in the simulation the imaging report arrives the day of the appointment.
+    imagingReport: { step: "Imaging report", dueDaysAfterAppointment: 3 },
     measureWindowDays: 60
   };
 
@@ -597,41 +602,30 @@ Reply with only a JSON object in this shape, no other text:
   }
   var TEMPLATES = ["book_imaging", "book_biopsy", "book_6mo", "portal", "call", "nudge", "transport", "slots", "appt_reminder"];
 
-  /* ---------- the simulation ---------- */
-  function simulate(input) {
-    var docsById = {}, repliesById = {};
-    input.documents.forEach(function (d) { docsById[d.id] = d; });
-    input.replies.forEach(function (r) { repliesById[r.id] = r; });
-    var reads = input.reads;
-    var events = [], agenda = {}, cases = {}, snapshots = [];
+  /* ---------- the engine: one patient's follow-up loop ---------- */
+  /*
+    The same engine runs the simulation below and the local workspace in server/.
+    A case is plain data (see newCase), so the workspace can save it between steps.
+      hooks.log(event, c)               records what happened
+      hooks.world(c, when, day, ctx)    lets the simulated world react (the workspace has no script)
+      hooks.check(doc, read)            returns problems with Claude's read (default: checkRead)
+  */
+  function newCase(patient) {
+    return { patient: patient, started: false, closed: null, person: null, booked: null, step: null, openCat: null, openDate: null,
+      resolvedDay: null, neededPerson: false, used: {}, lastAgent: null, birads: null, bi3: null };
+  }
 
-    function schedule(day, item) { (agenda[day] = agenda[day] || []).push(item); }
-
-    input.patients.forEach(function (p) {
-      cases[p.id] = { patient: p, started: false, closed: null, person: null, booked: null, step: null, openCat: null, openDate: null,
-        resolvedDay: null, neededPerson: false, used: {}, lastAgent: null, birads: null, bi3: null };
-      schedule(Math.max(0, dayOf(p.arrives)), { type: "doc", patient: p.id, doc: p.first_doc, first: true });
-    });
+  function createEngine(hooks) {
+    hooks = hooks || {};
+    var check = hooks.check || checkRead;
+    var world = hooks.world || function () {};
 
     function log(c, day, actor, kind, text, extra) {
       var e = { day: day, date: dateOf(day), patient: c.patient.id, actor: actor, kind: kind, text: text };
       if (extra) Object.keys(extra).forEach(function (k) { e[k] = extra[k]; });
-      events.push(e);
+      if (hooks.log) hooks.log(e, c);
       if (actor === "agent" && e.short) c.lastAgent = e.short;
       return e;
-    }
-
-    // The simulated world reacts to what the agent did. The agent never reads this.
-    function trigger(c, when, day, ctx) {
-      (c.patient.reactions || []).forEach(function (r, i) {
-        if (c.used[i] || r.when !== when) return;
-        if (r.doc && when === "outreach" && (!ctx || ctx.doc !== r.doc)) return;
-        c.used[i] = true;
-        var d = day + (r.after || 0);
-        if (r.person) { schedule(d, { type: "person", patient: c.patient.id, react: r }); return; }
-        if (r.reply) schedule(d, { type: "reply", patient: c.patient.id, reply: r.reply });
-        if (r.book) schedule(d, { type: "book", patient: c.patient.id, book: r.book });
-      });
     }
 
     function send(c, day, channel, template, extra, short) {
@@ -642,9 +636,9 @@ Reply with only a JSON object in this shape, no other text:
       c.person = { who: who, reason: reason, kind: kind, since: day };
       if (kind === "exception" || kind === "hold") c.neededPerson = true;
       log(c, day, "agent", "handoff", "Handed to the " + who.toLowerCase() + ". " + reason, { short: short, handoffKind: kind, who: who });
-      if (kind === "exception") trigger(c, "handoff", day, {});
-      if (kind === "hold") trigger(c, "hold", day, {});
-      if (kind === "concordance") trigger(c, "concordance", day, {});
+      if (kind === "exception") world(c, "handoff", day, {});
+      if (kind === "hold") world(c, "hold", day, {});
+      if (kind === "concordance") world(c, "concordance", day, {});
     }
 
     function close(c, day, outcome, short) {
@@ -664,6 +658,8 @@ Reply with only a JSON object in this shape, no other text:
       };
       c.booked = null;
       log(c, day, "agent", "pathway", "Pathway: " + cfg.step.toLowerCase() + ", due " + fmt(c.step.due) + ". Outreach starts now.", { short: "Due date set: " + fmtShort(c.step.due) });
+      // A report read after the hand-off day goes straight to a person instead of starting outreach.
+      if (day >= c.step.personDay) handoff(c, day, "Nurse navigator", "This report is already beyond the unbooked handoff threshold (day " + cfg.personIfNotBookedByDay + " after the exam), so a person takes it now.", "Report came in late, sent to the navigator", "exception");
     }
 
     function attempt(c, day, channel) {
@@ -673,16 +669,16 @@ Reply with only a JSON object in this shape, no other text:
       var tpl = channel === "text" ? (s.kind === "biopsy" ? "book_biopsy" : s.kind === "shortInterval" ? "book_6mo" : "book_imaging") : channel;
       var short = channel === "text" ? (s.attempts === 1 ? "Texted a booking link" : "Texted the booking link again") : channel === "portal" ? "Sent a portal message" : "Made an automated call";
       send(c, day, channel, tpl, { due: s.due }, short);
-      if (s.attempts === 1) trigger(c, "outreach", day, { doc: s.doc });
+      if (s.attempts === 1) world(c, "outreach", day, { doc: s.doc });
     }
 
-    function onDoc(c, doc, day, item) {
+    function onDoc(c, doc, r, day, opts) {
+      opts = opts || {};
       var first = !c.started;
       c.started = true;
-      log(c, day, "system", "doc", (item.first && c.patient.source ? c.patient.source + ". " : "") + doc.title + " arrived.", { doc: doc.id });
-      var r = reads.documents[doc.id];
+      log(c, day, "system", "doc", (opts.source ? opts.source + ". " : "") + doc.title + " arrived.", { doc: doc.id });
       log(c, day, "agent", "read", "Claude read the " + doc.title.toLowerCase() + ": " + summarizeRead(doc, r) + ".", { doc: doc.id, short: "Read the " + doc.title.toLowerCase() });
-      var problems = checkRead(doc, r);
+      var problems = check(doc, r);
       if (problems.length) {
         log(c, day, "agent", "check", "Check failed. " + problems.join(" "), { doc: doc.id, ok: false });
         if (first) { c.openCat = "unclear"; c.openDate = (r && r.exam_date) || doc.date; }
@@ -729,6 +725,8 @@ Reply with only a JSON object in this shape, no other text:
           doc: doc.id, attempts: 0, replied: false, lastContact: null, sent: {}, overdueLogged: false
         };
         log(c, day, "agent", "pathway", "Pathway: 6-month follow-up imaging, due " + fmt(due) + ". Reminders start " + fmt(c.step.outreachStart) + ".", { short: "Watching: due " + fmtShort(due) });
+        // Same rule as above: already a month past due means a person takes it now.
+        if (day >= dayOf(c.step.personDate)) handoff(c, day, "Nurse navigator", "This report is already beyond the unbooked handoff threshold (one month after the due date), so a person takes it now.", "Report came in late, sent to the navigator", "exception");
         return;
       }
       c.step = { kind: "review", name: "Review", due: null };
@@ -748,18 +746,17 @@ Reply with only a JSON object in this shape, no other text:
       }
     }
 
-    function onReply(c, id, day) {
-      var reply = repliesById[id], r = reads.replies[id];
-      log(c, day, "patient", "reply", reply.text, { reply: id });
+    function onReply(c, reply, r, day) {
+      log(c, day, "patient", "reply", reply.text, { reply: reply.id });
       var labels = (r && r.labels && r.labels.length) ? r.labels : ["other"];
       var quoteOk = !!(r && r.quote && reply.text.indexOf(r.quote) >= 0);
-      log(c, day, "agent", "readreply", "Claude read her reply: " + (r ? r.summary : "no answer") + " Labels: " + labels.join(", ") + ".", { reply: id, short: "Read her reply", labels: labels });
+      log(c, day, "agent", "readreply", "Claude read her reply: " + (r ? r.summary : "no answer") + " Labels: " + labels.join(", ") + ".", { reply: reply.id, short: "Read her reply", labels: labels });
       if (c.step) { c.step.replied = true; c.step.lastContact = day; }
       if (!quoteOk) return handoff(c, day, "Nurse navigator", "Claude's quote didn't match her message, so a person reads it.", "Reply needs a person", "exception");
       var exc = labels.filter(function (l) { return EXCEPTIONS[l]; });
       if (exc.length) return handoff(c, day, "Nurse navigator", EXCEPTIONS[exc[0]] + ". A person takes it from here.", EXCEPTIONS[exc[0]] + ", sent to navigator", "exception");
-      if (labels.indexOf("transport_barrier") >= 0) { send(c, day, "text", "transport", {}, "Sent a free ride option after she said she had no ride"); trigger(c, "transport", day, {}); return; }
-      if (labels.indexOf("wants_new_time") >= 0) { send(c, day, "text", "slots", {}, "Sent other open times"); trigger(c, "slots", day, {}); return; }
+      if (labels.indexOf("transport_barrier") >= 0) { send(c, day, "text", "transport", {}, "Sent a free ride option after she said she had no ride"); world(c, "transport", day, {}); return; }
+      if (labels.indexOf("wants_new_time") >= 0) { send(c, day, "text", "slots", {}, "Sent other open times"); world(c, "slots", day, {}); return; }
       if (labels.indexOf("booked") >= 0) { log(c, day, "agent", "note", "She says she booked. The agent checks the schedule to confirm.", { short: "Checking the schedule" }); return; }
       handoff(c, day, "Nurse navigator", "A reply the agent couldn't sort.", "Reply needs a person", "exception");
     }
@@ -770,14 +767,6 @@ Reply with only a JSON object in this shape, no other text:
       log(c, day, "agent", "booked", "Checked the schedule: " + (c.booked.kind === "biopsy" ? "biopsy" : "imaging") + " booked for " + weekday(book.appt) + " " + fmt(book.appt) + (byPerson ? ", booked with the navigator" : "") + ".", { short: "Saw a booking for " + fmtShort(book.appt) });
     }
 
-    function onPerson(c, item, day) {
-      var r = item.react;
-      log(c, day, "person", "person", r.note, { who: r.person });
-      if (r.when === "concordance") { c.person = null; close(c, day, "Benign and concordant. Back to annual screening.", "Resolved: benign and concordant"); return; }
-      if (r.doc) schedule(day, { type: "doc", patient: c.patient.id, doc: r.doc });
-      if (r.book) onBook(c, r.book, day, true);
-    }
-
     function onAppt(c, day) {
       var b = c.booked;
       if (b.kind === "biopsy") {
@@ -785,12 +774,27 @@ Reply with only a JSON object in this shape, no other text:
         c.step = { kind: "pathology", name: RULES.pathology.step, due: addDays(dateOf(day), RULES.pathology.dueDaysAfterBiopsy), personDay: day + RULES.pathology.dueDaysAfterBiopsy };
         log(c, day, "agent", "pathway", "Watching for the pathology result, due " + fmt(c.step.due) + ". The agent never gives results to the patient.", { short: "Watching for pathology" });
         c.booked = null;
-        schedule(day + b.resultAfter, { type: "doc", patient: c.patient.id, doc: b.result });
       } else {
         log(c, day, "system", "appt", "Appointment done.", {});
+        // In the simulation the report arrives the same day. In the workspace the agent watches for it.
+        if (c.step) c.step.awaitingResult = { since: day, personDay: day + RULES.imagingReport.dueDaysAfterAppointment };
         c.booked = null;
-        schedule(day, { type: "doc", patient: c.patient.id, doc: b.result });
       }
+      world(c, "appt", day, { booking: b });
+    }
+
+    // People in the loop. The simulation scripts them; in the workspace they are buttons.
+    function personNote(c, day, who, note) { log(c, day, "person", "person", note, { who: who }); }
+    function concordant(c, day) { c.person = null; close(c, day, "Benign and concordant. Back to annual screening.", "Resolved: benign and concordant"); }
+    function resume(c, day) {
+      c.person = null;
+      if (c.step) { c.step.replied = true; c.step.lastContact = day; }
+      log(c, day, "agent", "note", "The navigator handed the case back. The agent keeps following up.", { short: "Picked the case back up" });
+    }
+    function closeByPerson(c, day, who, outcome) {
+      c.person = null;
+      c.closed = { day: day, outcome: outcome, by: who };
+      log(c, day, "person", "close", "Case closed by the " + who.toLowerCase() + ". " + outcome, { who: who });
     }
 
     function tick(c, day) {
@@ -800,6 +804,10 @@ Reply with only a JSON object in this shape, no other text:
         var ad = dayOf(c.booked.appt);
         if (day === ad - 1 && !c.booked.reminded) { c.booked.reminded = true; send(c, day, "text", "appt_reminder", { appt: c.booked.appt }, "Sent an appointment reminder"); }
         if (day === ad && !c.booked.arrived) { c.booked.arrived = true; onAppt(c, day); }
+        return;
+      }
+      if (s.awaitingResult) {
+        if (day >= s.awaitingResult.personDay && !c.person) handoff(c, day, "Nurse navigator", "No report " + RULES.imagingReport.dueDaysAfterAppointment + " days after the appointment.", "No report after the appointment, sent to a person", "exception");
         return;
       }
       if (s.due && day === dayOf(s.due) + 1 && !s.overdueLogged) {
@@ -830,10 +838,73 @@ Reply with only a JSON object in this shape, no other text:
     function status(c, day) {
       if (!c.started) return "waiting";
       if (c.closed) return "done";
-      if (c.step && c.step.due && day > dayOf(c.step.due)) return "overdue";
+      if (c.step && c.step.due && !c.step.awaitingResult && day > dayOf(c.step.due)) return "overdue";
       if (c.person) return "person";
       if (c.booked) return "booked";
       return "agent";
+    }
+
+    function snapshot(c, day) {
+      var s = c.step;
+      return {
+        status: status(c, day), cat: c.openCat, birads: c.birads,
+        step: s ? s.name : null, due: s ? s.due : null,
+        overdueDays: s && s.due && !c.closed && !s.awaitingResult ? Math.max(0, day - dayOf(s.due)) : 0,
+        person: c.person ? c.person.who : null, personKind: c.person ? c.person.kind : null,
+        booked: c.booked ? c.booked.appt : null,
+        lastAgent: c.lastAgent, outcome: c.closed ? c.closed.outcome : null,
+        resolvedDays: c.resolvedDay !== null ? c.resolvedDay - dayOf(c.openDate) : null,
+        neededPerson: c.neededPerson, bi3: c.bi3 ? { onTime: c.bi3.onTime } : null
+      };
+    }
+
+    return { onDoc: onDoc, onReply: onReply, onBook: onBook, tick: tick, status: status, snapshot: snapshot,
+      personNote: personNote, concordant: concordant, resume: resume, closeByPerson: closeByPerson };
+  }
+
+  /* ---------- the simulation ---------- */
+  function simulate(input) {
+    var docsById = {}, repliesById = {};
+    input.documents.forEach(function (d) { docsById[d.id] = d; });
+    input.replies.forEach(function (r) { repliesById[r.id] = r; });
+    var reads = input.reads;
+    var events = [], agenda = {}, cases = {}, snapshots = [];
+
+    function schedule(day, item) { (agenda[day] = agenda[day] || []).push(item); }
+
+    // The simulated world reacts to what the agent did. The agent never reads this.
+    function trigger(c, when, day, ctx) {
+      (c.patient.reactions || []).forEach(function (r, i) {
+        if (c.used[i] || r.when !== when) return;
+        if (r.doc && when === "outreach" && (!ctx || ctx.doc !== r.doc)) return;
+        c.used[i] = true;
+        var d = day + (r.after || 0);
+        if (r.person) { schedule(d, { type: "person", patient: c.patient.id, react: r }); return; }
+        if (r.reply) schedule(d, { type: "reply", patient: c.patient.id, reply: r.reply });
+        if (r.book) schedule(d, { type: "book", patient: c.patient.id, book: r.book });
+      });
+    }
+
+    var engine = createEngine({
+      log: function (e) { events.push(e); },
+      world: function (c, when, day, ctx) {
+        // After an appointment the result report arrives: the same day for imaging, later for pathology.
+        if (when === "appt") { var b = ctx.booking; schedule(day + (b.kind === "biopsy" ? b.resultAfter : 0), { type: "doc", patient: c.patient.id, doc: b.result }); return; }
+        trigger(c, when, day, ctx);
+      }
+    });
+
+    input.patients.forEach(function (p) {
+      cases[p.id] = newCase(p);
+      schedule(Math.max(0, dayOf(p.arrives)), { type: "doc", patient: p.id, doc: p.first_doc, first: true });
+    });
+
+    function onPerson(c, item, day) {
+      var r = item.react;
+      engine.personNote(c, day, r.person, r.note);
+      if (r.when === "concordance") { engine.concordant(c, day); return; }
+      if (r.doc) schedule(day, { type: "doc", patient: c.patient.id, doc: r.doc });
+      if (r.book) engine.onBook(c, r.book, day, true);
     }
 
     for (var day = 0; day <= RULES.days; day++) {
@@ -841,35 +912,24 @@ Reply with only a JSON object in this shape, no other text:
       do {
         while (agenda[day] && agenda[day].length) {
           var it = agenda[day].shift(), c = cases[it.patient];
-          if (it.type === "doc") onDoc(c, docsById[it.doc], day, it);
-          else if (it.type === "reply") onReply(c, it.reply, day);
-          else if (it.type === "book") onBook(c, it.book, day, false);
+          if (it.type === "doc") engine.onDoc(c, docsById[it.doc], reads.documents[it.doc], day, { source: it.first ? c.patient.source : null });
+          else if (it.type === "reply") engine.onReply(c, repliesById[it.reply], reads.replies[it.reply], day);
+          else if (it.type === "book") engine.onBook(c, it.book, day, false);
           else if (it.type === "person") onPerson(c, it, day);
         }
-        input.patients.forEach(function (p) { tick(cases[p.id], day); });
+        input.patients.forEach(function (p) { engine.tick(cases[p.id], day); });
         guard++;
       } while (agenda[day] && agenda[day].length && guard < 20);
 
       var snap = {};
-      input.patients.forEach(function (p) {
-        var c = cases[p.id], s = c.step;
-        snap[p.id] = {
-          status: status(c, day), cat: c.openCat, birads: c.birads,
-          step: s ? s.name : null, due: s ? s.due : null,
-          overdueDays: s && s.due && !c.closed ? Math.max(0, day - dayOf(s.due)) : 0,
-          person: c.person ? c.person.who : null, personKind: c.person ? c.person.kind : null,
-          booked: c.booked ? c.booked.appt : null,
-          lastAgent: c.lastAgent, outcome: c.closed ? c.closed.outcome : null,
-          resolvedDays: c.resolvedDay !== null ? c.resolvedDay - dayOf(c.openDate) : null,
-          neededPerson: c.neededPerson, bi3: c.bi3 ? { onTime: c.bi3.onTime } : null
-        };
-      });
+      input.patients.forEach(function (p) { snap[p.id] = engine.snapshot(cases[p.id], day); });
       snapshots.push(snap);
     }
     return { events: events, snapshots: snapshots };
   }
 
-  var api = { RULES: RULES, EXCEPTIONS: EXCEPTIONS, TEMPLATES: TEMPLATES, simulate: simulate, checkRead: checkRead, normBirads: normBirads, pathwayFor: pathwayFor,
+  var api = { RULES: RULES, EXCEPTIONS: EXCEPTIONS, TEMPLATES: TEMPLATES, simulate: simulate, createEngine: createEngine, newCase: newCase,
+    checkRead: checkRead, summarizeRead: summarizeRead, normBirads: normBirads, pathwayFor: pathwayFor, catOf: catOf,
     addDays: addDays, addMonths: addMonths, dayOf: dayOf, dateOf: dateOf, fmt: fmt, fmtShort: fmtShort, weekday: weekday, message: message };
   if (typeof module !== "undefined" && module.exports) module.exports = api; else root.BreastAgent = api;
 })(this);
