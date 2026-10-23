@@ -1,0 +1,52 @@
+{
+  "P2-r1": {
+    "labels": [
+      "booked"
+    ],
+    "quote": "booked for Thursday the 10th",
+    "summary": "She says she booked her appointment for Thursday the 10th."
+  },
+  "P3-r1": {
+    "labels": [
+      "transport_barrier"
+    ],
+    "quote": "I don't drive and my son works all day. I have no way to get there.",
+    "summary": "She wants to attend the appointment but has no transportation because she doesn't drive and her son is at work."
+  },
+  "P3-r2": {
+    "labels": [
+      "booked"
+    ],
+    "quote": "I booked Tuesday at 9.",
+    "summary": "She booked an appointment for Tuesday at 9 and says the ride arrangement works for her."
+  },
+  "P5-r1": {
+    "labels": [
+      "booked"
+    ],
+    "quote": "Booked for October 8.",
+    "summary": "She says she has booked her appointment for October 8 and thanks us for the reminder."
+  },
+  "P7-r1": {
+    "labels": [
+      "scared_or_worried",
+      "other"
+    ],
+    "quote": "I'm really scared this means I have cancer. I haven't slept since the appointment. Can someone call me?",
+    "summary": "She is very scared she may have cancer, has not been sleeping, and is asking for someone to phone her."
+  },
+  "P8-r1": {
+    "labels": [
+      "booked"
+    ],
+    "quote": "Booked for Monday morning.",
+    "summary": "She says she has booked her appointment for Monday morning."
+  },
+  "P9-r1": {
+    "labels": [
+      "booked"
+    ],
+    "quote": "I scheduled it for the 29th",
+    "summary": "She says she scheduled her appointment for the 29th."
+  }
+}

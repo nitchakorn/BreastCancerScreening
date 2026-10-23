@@ -1,0 +1,404 @@
+/*
+  Breast screening follow-up agent: the rules and a day-by-day simulation.
+
+  Claude reads every report and every patient reply (scripts/read.js saves those
+  reads in reads/). Everything in this file is plain code. It checks Claude's
+  reads, picks the pathway, sets the due date, decides each outreach step, and
+  hands a case to a person only when a rule says so.
+
+  The simulated world (when a patient replies, books, or what a navigator does)
+  comes from data/patients.json. The agent never sees that script. It only sees
+  what arrives: reports, replies, bookings and notes from people.
+
+  Works in Node (require) and in the browser (window.BreastAgent).
+*/
+(function (root) {
+  "use strict";
+
+  var RULES = {
+    start: "2026-09-01",
+    days: 90,
+    link: "riverside.example/book",
+    rideLink: "riverside.example/ride",
+    phone: "555-0142",
+    // BI-RADS 0, 4 and 5: outreach starts as soon as the report is read.
+    urgent: {
+      attempts: [{ after: 0, channel: "text" }, { after: 2, channel: "portal" }, { after: 4, channel: "call" }],
+      noAnswerHandoffAfter: 5,
+      nudgeEvery: 3
+    },
+    diagnostic: { step: "Diagnostic mammogram or ultrasound", dueDays: 14, personIfNotBookedByDay: 30 },
+    biopsy: { step: "Biopsy", dueDays: 14, personIfNotBookedByDay: 7, headsUpCategory: "5" },
+    // BI-RADS 3: there is time, so reminders keep going until one month after the due date.
+    shortInterval: {
+      step: "6-month follow-up imaging", dueMonths: 6, outreachMonthsBefore: 1, personMonthsAfterDue: 1, nudgeEvery: 7,
+      attempts: [
+        { fromStart: 0, channel: "text" }, { fromStart: 7, channel: "portal" }, { fromStart: 14, channel: "call" },
+        { fromDue: -7, channel: "text" }, { fromDue: 0, channel: "text" }, { fromDue: 14, channel: "portal" }
+      ]
+    },
+    pathology: { step: "Pathology result", dueDaysAfterBiopsy: 10 },
+    measureWindowDays: 60
+  };
+
+  // Reply labels that send the case to a person right away.
+  var EXCEPTIONS = {
+    scared_or_worried: "She said she is scared or worried",
+    medical_question: "She asked a medical question",
+    declines_care: "She turned down care",
+    other_barrier: "She raised a barrier the agent can't solve",
+    wrong_number: "The text reached the wrong person"
+  };
+
+  /* ---------- dates ---------- */
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  var WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  function addDays(iso, n) { var d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+  function addMonths(iso, n) {
+    var p = iso.split("-").map(Number), y = p[0], m = p[1] - 1 + n;
+    y += Math.floor(m / 12); m = ((m % 12) + 12) % 12;
+    var last = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+    return new Date(Date.UTC(y, m, Math.min(p[2], last), 12)).toISOString().slice(0, 10);
+  }
+  function dayOf(iso) { return Math.round((Date.parse(iso + "T12:00:00Z") - Date.parse(RULES.start + "T12:00:00Z")) / 864e5); }
+  function dateOf(day) { return addDays(RULES.start, day); }
+  function fmt(iso) { if (!iso) return ""; var p = iso.split("-"); return MONTHS[Number(p[1]) - 1] + " " + Number(p[2]) + ", " + p[0]; }
+  function fmtShort(iso) { if (!iso) return ""; var p = iso.split("-"); return MONTHS[Number(p[1]) - 1] + " " + Number(p[2]); }
+  function weekday(iso) { return WEEKDAYS[new Date(iso + "T12:00:00Z").getUTCDay()]; }
+
+  /* ---------- reading checks (step 3) ---------- */
+  function normBirads(b) {
+    if (b === null || b === undefined) return null;
+    var m = String(b).trim().toUpperCase().match(/^([0-6])[ABC]?$/);
+    return m ? m[1] : null;
+  }
+  function pathwayFor(b) {
+    if (b === "1" || b === "2") return "routine";
+    if (b === "0") return "diagnostic";
+    if (b === "3") return "shortInterval";
+    if (b === "4" || b === "5") return "biopsy";
+    return null;
+  }
+  function catOf(b) { return b === "1" || b === "2" ? "1-2" : b === "0" ? "0" : b === "3" ? "3" : b === "4" || b === "5" ? "4-5" : "unclear"; }
+
+  function checkRead(doc, r) {
+    var problems = [];
+    if (!r) return ["Claude's answer could not be read."];
+    var q = r.quotes || {};
+    Object.keys(q).forEach(function (k) {
+      if (q[k] && doc.text.indexOf(q[k]) < 0) problems.push("The quote for " + k.replace("_", " ") + " is not in the report word for word.");
+    });
+    if (r.mismatch_quote && doc.text.indexOf(r.mismatch_quote) < 0) problems.push("The quote for the conflicting finding is not in the report word for word.");
+    if (doc.kind === "pathology") {
+      if (!r.pathology_result) problems.push("No pathology result is stated.");
+      return problems;
+    }
+    if (!normBirads(r.birads)) problems.push("No BI-RADS category in the impression.");
+    if (r.findings_match_impression === false) problems.push("The findings and the impression disagree" + (r.mismatch_quote ? ": \"" + r.mismatch_quote + "\"" : "") + ".");
+    return problems;
+  }
+
+  function summarizeRead(doc, r) {
+    if (!r) return "no answer";
+    if (doc.kind === "pathology") return (r.pathology_result || "no result") + (r.diagnosis ? " (" + r.diagnosis + ")" : "");
+    var s = "BI-RADS " + (r.birads == null ? "missing" : r.birads);
+    if (r.side && r.side !== "null") s += ", " + r.side + (r.side === "both" ? " breasts" : " breast");
+    if (r.next_step) s += ". Next step: " + r.next_step;
+    return s;
+  }
+
+  /* ---------- messages (wording approved once, before launch) ---------- */
+  function message(kind, c, extra) {
+    var f = c.patient.first;
+    extra = extra || {};
+    switch (kind) {
+      case "book_imaging": return "Hi " + f + ", this is Riverside Breast Center. Your care team would like you to come back for more imaging. You can book here: " + RULES.link + ". Reply to this text if you have questions or need help getting here.";
+      case "book_biopsy": return "Hi " + f + ", this is Riverside Breast Center. Your care team asked us to help you schedule the appointment they discussed with you. You can book here: " + RULES.link + ". We can help with a ride, directions and what to expect. Reply anytime.";
+      case "book_6mo": return "Hi " + f + ", this is Riverside Breast Center. Your 6-month follow-up imaging is due " + fmt(extra.due) + ". You can book here: " + RULES.link + ". Reply if you need help.";
+      case "portal": return "Patient portal message: Please schedule your follow-up appointment at Riverside Breast Center. Book online at " + RULES.link + " or call " + RULES.phone + ".";
+      case "call": return "Automated call asking her to book her follow-up appointment, with an option to press 1 to reach the scheduling team.";
+      case "nudge": return "Hi " + f + ", checking in. You can still book your follow-up here: " + RULES.link + ". Reply if something is getting in the way.";
+      case "transport": return "We can set up a free ride to and from your appointment. Book it here: " + RULES.rideLink + ", or reply RIDE and we'll arrange it.";
+      case "slots": return "Here are other open times: Mon 9:00, Wed 1:30, Fri 10:15. Reply with the one that works.";
+      case "appt_reminder": return "Reminder: your appointment at Riverside Breast Center is tomorrow, " + weekday(extra.appt) + " " + fmtShort(extra.appt) + ". Reply if you need a ride or a different time.";
+    }
+    return "";
+  }
+  var TEMPLATES = ["book_imaging", "book_biopsy", "book_6mo", "portal", "call", "nudge", "transport", "slots", "appt_reminder"];
+
+  /* ---------- the simulation ---------- */
+  function simulate(input) {
+    var docsById = {}, repliesById = {};
+    input.documents.forEach(function (d) { docsById[d.id] = d; });
+    input.replies.forEach(function (r) { repliesById[r.id] = r; });
+    var reads = input.reads;
+    var events = [], agenda = {}, cases = {}, snapshots = [];
+
+    function schedule(day, item) { (agenda[day] = agenda[day] || []).push(item); }
+
+    input.patients.forEach(function (p) {
+      cases[p.id] = { patient: p, started: false, closed: null, person: null, booked: null, step: null, openCat: null, openDate: null,
+        resolvedDay: null, neededPerson: false, used: {}, lastAgent: null, birads: null, bi3: null };
+      schedule(Math.max(0, dayOf(p.arrives)), { type: "doc", patient: p.id, doc: p.first_doc, first: true });
+    });
+
+    function log(c, day, actor, kind, text, extra) {
+      var e = { day: day, date: dateOf(day), patient: c.patient.id, actor: actor, kind: kind, text: text };
+      if (extra) Object.keys(extra).forEach(function (k) { e[k] = extra[k]; });
+      events.push(e);
+      if (actor === "agent" && e.short) c.lastAgent = e.short;
+      return e;
+    }
+
+    // The simulated world reacts to what the agent did. The agent never reads this.
+    function trigger(c, when, day, ctx) {
+      (c.patient.reactions || []).forEach(function (r, i) {
+        if (c.used[i] || r.when !== when) return;
+        if (r.doc && when === "outreach" && (!ctx || ctx.doc !== r.doc)) return;
+        c.used[i] = true;
+        var d = day + (r.after || 0);
+        if (r.person) { schedule(d, { type: "person", patient: c.patient.id, react: r }); return; }
+        if (r.reply) schedule(d, { type: "reply", patient: c.patient.id, reply: r.reply });
+        if (r.book) schedule(d, { type: "book", patient: c.patient.id, book: r.book });
+      });
+    }
+
+    function send(c, day, channel, template, extra, short) {
+      return log(c, day, "agent", channel, message(template, c, extra), { short: short, channel: channel, template: template });
+    }
+
+    function handoff(c, day, who, reason, short, kind) {
+      c.person = { who: who, reason: reason, kind: kind, since: day };
+      if (kind === "exception" || kind === "hold") c.neededPerson = true;
+      log(c, day, "agent", "handoff", "Handed to the " + who.toLowerCase() + ". " + reason, { short: short, handoffKind: kind, who: who });
+      if (kind === "exception") trigger(c, "handoff", day, {});
+      if (kind === "hold") trigger(c, "hold", day, {});
+      if (kind === "concordance") trigger(c, "concordance", day, {});
+    }
+
+    function close(c, day, outcome, short) {
+      c.closed = { day: day, outcome: outcome };
+      if (c.person && c.person.kind !== "surgery") c.person = null;
+      if ((c.openCat === "0" || c.openCat === "4-5" || c.openCat === "unclear") && c.resolvedDay === null) c.resolvedDay = day;
+      log(c, day, "agent", "close", "Case closed. " + outcome, { short: short });
+    }
+
+    function openUrgentStep(c, day, kind, exam, docId) {
+      var cfg = RULES[kind];
+      c.step = {
+        kind: kind, name: cfg.step, due: addDays(exam, cfg.dueDays), personDay: dayOf(exam) + cfg.personIfNotBookedByDay,
+        doc: docId, attempts: 0, replied: false, lastContact: null, noAnswerDay: day + RULES.urgent.noAnswerHandoffAfter,
+        plan: RULES.urgent.attempts.map(function (a) { return { day: day + a.after, channel: a.channel, done: false }; }),
+        overdueLogged: false
+      };
+      c.booked = null;
+      log(c, day, "agent", "pathway", "Pathway: " + cfg.step.toLowerCase() + ", due " + fmt(c.step.due) + ". Outreach starts now.", { short: "Due date set: " + fmtShort(c.step.due) });
+    }
+
+    function attempt(c, day, channel) {
+      var s = c.step;
+      s.attempts++;
+      s.lastContact = day;
+      var tpl = channel === "text" ? (s.kind === "biopsy" ? "book_biopsy" : s.kind === "shortInterval" ? "book_6mo" : "book_imaging") : channel;
+      var short = channel === "text" ? (s.attempts === 1 ? "Texted a booking link" : "Texted the booking link again") : channel === "portal" ? "Sent a portal message" : "Made an automated call";
+      send(c, day, channel, tpl, { due: s.due }, short);
+      if (s.attempts === 1) trigger(c, "outreach", day, { doc: s.doc });
+    }
+
+    function onDoc(c, doc, day, item) {
+      var first = !c.started;
+      c.started = true;
+      log(c, day, "system", "doc", (item.first && c.patient.source ? c.patient.source + ". " : "") + doc.title + " arrived.", { doc: doc.id });
+      var r = reads.documents[doc.id];
+      log(c, day, "agent", "read", "Claude read the " + doc.title.toLowerCase() + ": " + summarizeRead(doc, r) + ".", { doc: doc.id, short: "Read the " + doc.title.toLowerCase() });
+      var problems = checkRead(doc, r);
+      if (problems.length) {
+        log(c, day, "agent", "check", "Check failed. " + problems.join(" "), { doc: doc.id, ok: false });
+        if (first) { c.openCat = "unclear"; c.openDate = (r && r.exam_date) || doc.date; }
+        c.step = { kind: "review", name: "Radiologist review", due: null };
+        handoff(c, day, "Radiologist", "The report is unclear, so the case stops here until a radiologist looks at it.", "Held for a radiologist: report unclear", "hold");
+        return;
+      }
+      log(c, day, "agent", "check", "Checks passed. Every quote matches the report word for word" + (doc.kind === "pathology" ? "." : ", and the findings fit the impression."), { doc: doc.id, ok: true });
+      if (c.person && c.person.kind === "hold") {
+        c.person = null;
+        log(c, day, "agent", "note", "The radiologist's correction passed the checks. The agent picks the case back up.", { short: "Picked the case back up" });
+      }
+      if (doc.kind === "pathology") return onPathology(c, doc, r, day);
+
+      var b = normBirads(r.birads), pw = pathwayFor(b), exam = r.exam_date || doc.date;
+      c.birads = r.birads;
+      if (first) { c.openCat = catOf(b); c.openDate = exam; }
+
+      if (pw === "routine") {
+        if (c.openCat === "1-2") c.step = { kind: "routine", name: "Routine screening", due: addMonths(exam, 12) };
+        if (c.openCat === "1-2") close(c, day, "Routine screening. Next screen due " + fmt(addMonths(exam, 12)) + ". No outreach needed.", "None needed. Routine screening");
+        else close(c, day, "Resolved as BI-RADS " + r.birads + ". Back to routine screening.", "Resolved: back to routine screening");
+        return;
+      }
+      if (pw === "diagnostic") { openUrgentStep(c, day, "diagnostic", exam, doc.id); return; }
+      if (pw === "biopsy") {
+        openUrgentStep(c, day, "biopsy", exam, doc.id);
+        if (b === RULES.biopsy.headsUpCategory) log(c, day, "agent", "headsup", "Heads-up to the nurse navigator: a BI-RADS 5 was read today. The agent is handling outreach, and the case doesn't wait on her.", { short: "Heads-up to the navigator" });
+        log(c, day, "agent", "pcp", "Note to the ordering PCP: BI-RADS " + r.birads + ", biopsy recommended. The agent is helping her schedule it.", { short: "Told the ordering PCP" });
+        return;
+      }
+      if (pw === "shortInterval") {
+        if (c.step && c.step.kind === "shortInterval") {
+          var onTime = day <= dayOf(c.step.due);
+          c.bi3 = { due: c.step.due, doneDay: day, onTime: onTime };
+          close(c, day, "Stable at 6 months. Next imaging due " + fmt(addMonths(exam, 6)) + ", so she stays on the six-month track.", "Done on time. Next due " + fmtShort(addMonths(exam, 6)));
+          return;
+        }
+        var due = addMonths(exam, RULES.shortInterval.dueMonths);
+        c.step = {
+          kind: "shortInterval", name: RULES.shortInterval.step, due: due,
+          outreachStart: addMonths(due, -RULES.shortInterval.outreachMonthsBefore),
+          personDate: addMonths(due, RULES.shortInterval.personMonthsAfterDue),
+          doc: doc.id, attempts: 0, replied: false, lastContact: null, sent: {}, overdueLogged: false
+        };
+        log(c, day, "agent", "pathway", "Pathway: 6-month follow-up imaging, due " + fmt(due) + ". Reminders start " + fmt(c.step.outreachStart) + ".", { short: "Watching: due " + fmtShort(due) });
+        return;
+      }
+      c.step = { kind: "review", name: "Review", due: null };
+      handoff(c, day, "Radiologist", "BI-RADS " + r.birads + " has no pathway in these rules.", "No pathway, sent to a person", "hold");
+    }
+
+    function onPathology(c, doc, r, day) {
+      var res = r.pathology_result;
+      if (res === "malignant") {
+        log(c, day, "agent", "pcp", "Note to the ordering PCP: pathology shows " + r.diagnosis + ". Breast surgery is taking over.", { short: "Told the ordering PCP" });
+        handoff(c, day, "Breast surgery team", "Cancer diagnosis: " + r.diagnosis + ". Her care moves to the surgery team.", "Pathology received, handed to breast surgery", "surgery");
+        close(c, day, "Cancer diagnosed and handed to breast surgery. The agent's loop is done.", "Handed to breast surgery");
+      } else if (res === "benign") {
+        handoff(c, day, "Radiologist", "Benign result (" + r.diagnosis + "). A person confirms it matches the imaging before the case closes.", "Benign result sent for a match check", "concordance");
+      } else {
+        handoff(c, day, "Radiologist", "Pathology is " + res + ". A person decides the next step.", "Pathology needs a person", "hold");
+      }
+    }
+
+    function onReply(c, id, day) {
+      var reply = repliesById[id], r = reads.replies[id];
+      log(c, day, "patient", "reply", reply.text, { reply: id });
+      var labels = (r && r.labels && r.labels.length) ? r.labels : ["other"];
+      var quoteOk = !!(r && r.quote && reply.text.indexOf(r.quote) >= 0);
+      log(c, day, "agent", "readreply", "Claude read her reply: " + (r ? r.summary : "no answer") + " Labels: " + labels.join(", ") + ".", { reply: id, short: "Read her reply", labels: labels });
+      if (c.step) { c.step.replied = true; c.step.lastContact = day; }
+      if (!quoteOk) return handoff(c, day, "Nurse navigator", "Claude's quote didn't match her message, so a person reads it.", "Reply needs a person", "exception");
+      var exc = labels.filter(function (l) { return EXCEPTIONS[l]; });
+      if (exc.length) return handoff(c, day, "Nurse navigator", EXCEPTIONS[exc[0]] + ". A person takes it from here.", EXCEPTIONS[exc[0]] + ", sent to navigator", "exception");
+      if (labels.indexOf("transport_barrier") >= 0) { send(c, day, "text", "transport", {}, "Sent a free ride option after she said she had no ride"); trigger(c, "transport", day, {}); return; }
+      if (labels.indexOf("wants_new_time") >= 0) { send(c, day, "text", "slots", {}, "Sent other open times"); trigger(c, "slots", day, {}); return; }
+      if (labels.indexOf("booked") >= 0) { log(c, day, "agent", "note", "She says she booked. The agent checks the schedule to confirm.", { short: "Checking the schedule" }); return; }
+      handoff(c, day, "Nurse navigator", "A reply the agent couldn't sort.", "Reply needs a person", "exception");
+    }
+
+    function onBook(c, book, day, byPerson) {
+      c.booked = { appt: book.appt, kind: book.kind || "imaging", result: book.result, resultAfter: book.resultAfter || 0, reminded: false, arrived: false };
+      if (c.person && c.person.kind === "exception") c.person = null;
+      log(c, day, "agent", "booked", "Checked the schedule: " + (c.booked.kind === "biopsy" ? "biopsy" : "imaging") + " booked for " + weekday(book.appt) + " " + fmt(book.appt) + (byPerson ? ", booked with the navigator" : "") + ".", { short: "Saw a booking for " + fmtShort(book.appt) });
+    }
+
+    function onPerson(c, item, day) {
+      var r = item.react;
+      log(c, day, "person", "person", r.note, { who: r.person });
+      if (r.when === "concordance") { c.person = null; close(c, day, "Benign and concordant. Back to annual screening.", "Resolved: benign and concordant"); return; }
+      if (r.doc) schedule(day, { type: "doc", patient: c.patient.id, doc: r.doc });
+      if (r.book) onBook(c, r.book, day, true);
+    }
+
+    function onAppt(c, day) {
+      var b = c.booked;
+      if (b.kind === "biopsy") {
+        log(c, day, "system", "appt", "Biopsy done.", {});
+        c.step = { kind: "pathology", name: RULES.pathology.step, due: addDays(dateOf(day), RULES.pathology.dueDaysAfterBiopsy), personDay: day + RULES.pathology.dueDaysAfterBiopsy };
+        log(c, day, "agent", "pathway", "Watching for the pathology result, due " + fmt(c.step.due) + ". The agent never gives results to the patient.", { short: "Watching for pathology" });
+        c.booked = null;
+        schedule(day + b.resultAfter, { type: "doc", patient: c.patient.id, doc: b.result });
+      } else {
+        log(c, day, "system", "appt", "Appointment done.", {});
+        c.booked = null;
+        schedule(day, { type: "doc", patient: c.patient.id, doc: b.result });
+      }
+    }
+
+    function tick(c, day) {
+      if (!c.started || c.closed || !c.step) return;
+      var s = c.step;
+      if (c.booked) {
+        var ad = dayOf(c.booked.appt);
+        if (day === ad - 1 && !c.booked.reminded) { c.booked.reminded = true; send(c, day, "text", "appt_reminder", { appt: c.booked.appt }, "Sent an appointment reminder"); }
+        if (day === ad && !c.booked.arrived) { c.booked.arrived = true; onAppt(c, day); }
+        return;
+      }
+      if (s.due && day === dayOf(s.due) + 1 && !s.overdueLogged) {
+        s.overdueLogged = true;
+        log(c, day, "agent", "overdue", "Past due. " + s.name + " was due " + fmt(s.due) + ".", { short: "Marked overdue" });
+      }
+      if (s.kind === "pathology") {
+        if (day >= s.personDay && !c.person) handoff(c, day, "Nurse navigator", "No pathology result 10 days after the biopsy.", "No pathology result, sent to a person", "exception");
+        return;
+      }
+      if (c.person || s.kind === "review") return;
+      if (s.kind === "shortInterval") {
+        var startDay = dayOf(s.outreachStart), dueDay = dayOf(s.due);
+        RULES.shortInterval.attempts.forEach(function (a, i) {
+          var d = a.fromStart !== undefined ? startDay + a.fromStart : dueDay + a.fromDue;
+          if (d === day && !s.sent[i] && !s.replied) { s.sent[i] = true; attempt(c, day, a.channel); }
+        });
+        if (s.replied && s.lastContact !== null && day - s.lastContact >= RULES.shortInterval.nudgeEvery) { s.lastContact = day; send(c, day, "text", "nudge", {}, "Sent a check-in text"); }
+        if (day >= dayOf(s.personDate) && !c.person) handoff(c, day, "Nurse navigator", "Not done one month after the due date.", "One month past due, sent to the navigator", "exception");
+        return;
+      }
+      s.plan.forEach(function (a) { if (!a.done && a.day === day && !s.replied) { a.done = true; attempt(c, day, a.channel); } });
+      if (!s.replied && s.attempts >= 3 && day >= s.noAnswerDay) return handoff(c, day, "Nurse navigator", "No answer after three tries: a text, a portal message and an automated call.", "No answer after three tries, sent to the navigator", "exception");
+      if (s.replied && s.lastContact !== null && day - s.lastContact >= RULES.urgent.nudgeEvery) { s.lastContact = day; send(c, day, "text", "nudge", {}, "Sent a check-in text"); }
+      if (day >= s.personDay) handoff(c, day, "Nurse navigator", "Not booked within " + (s.kind === "biopsy" ? RULES.biopsy.personIfNotBookedByDay : RULES.diagnostic.personIfNotBookedByDay) + " days of the report.", "Not booked in time, sent to the navigator", "exception");
+    }
+
+    function status(c, day) {
+      if (!c.started) return "waiting";
+      if (c.closed) return "done";
+      if (c.step && c.step.due && day > dayOf(c.step.due)) return "overdue";
+      if (c.person) return "person";
+      if (c.booked) return "booked";
+      return "agent";
+    }
+
+    for (var day = 0; day <= RULES.days; day++) {
+      var guard = 0;
+      do {
+        while (agenda[day] && agenda[day].length) {
+          var it = agenda[day].shift(), c = cases[it.patient];
+          if (it.type === "doc") onDoc(c, docsById[it.doc], day, it);
+          else if (it.type === "reply") onReply(c, it.reply, day);
+          else if (it.type === "book") onBook(c, it.book, day, false);
+          else if (it.type === "person") onPerson(c, it, day);
+        }
+        input.patients.forEach(function (p) { tick(cases[p.id], day); });
+        guard++;
+      } while (agenda[day] && agenda[day].length && guard < 20);
+
+      var snap = {};
+      input.patients.forEach(function (p) {
+        var c = cases[p.id], s = c.step;
+        snap[p.id] = {
+          status: status(c, day), cat: c.openCat, birads: c.birads,
+          step: s ? s.name : null, due: s ? s.due : null,
+          overdueDays: s && s.due && !c.closed ? Math.max(0, day - dayOf(s.due)) : 0,
+          person: c.person ? c.person.who : null, personKind: c.person ? c.person.kind : null,
+          booked: c.booked ? c.booked.appt : null,
+          lastAgent: c.lastAgent, outcome: c.closed ? c.closed.outcome : null,
+          resolvedDays: c.resolvedDay !== null ? c.resolvedDay - dayOf(c.openDate) : null,
+          neededPerson: c.neededPerson, bi3: c.bi3 ? { onTime: c.bi3.onTime } : null
+        };
+      });
+      snapshots.push(snap);
+    }
+    return { events: events, snapshots: snapshots };
+  }
+
+  var api = { RULES: RULES, EXCEPTIONS: EXCEPTIONS, TEMPLATES: TEMPLATES, simulate: simulate, checkRead: checkRead, normBirads: normBirads, pathwayFor: pathwayFor,
+    addDays: addDays, addMonths: addMonths, dayOf: dayOf, dateOf: dateOf, fmt: fmt, fmtShort: fmtShort, weekday: weekday, message: message };
+  if (typeof module !== "undefined" && module.exports) module.exports = api; else root.BreastAgent = api;
+})(this);

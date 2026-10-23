@@ -1,0 +1,9 @@
+[
+  { "id": "P2-r1", "patient": "P2", "text": "Got it, booked for Thursday the 10th. Thanks!" },
+  { "id": "P3-r1", "patient": "P3", "text": "I want to come but I don't drive and my son works all day. I have no way to get there." },
+  { "id": "P3-r2", "patient": "P3", "text": "Thank you, the ride works. I booked Tuesday at 9." },
+  { "id": "P5-r1", "patient": "P5", "text": "Booked for October 8. Thank you for the reminder." },
+  { "id": "P7-r1", "patient": "P7", "text": "I'm really scared this means I have cancer. I haven't slept since the appointment. Can someone call me?" },
+  { "id": "P8-r1", "patient": "P8", "text": "Booked for Monday morning." },
+  { "id": "P9-r1", "patient": "P9", "text": "OK I scheduled it for the 29th." }
+]

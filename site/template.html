@@ -1,0 +1,647 @@
+<!-- HEAD -->
+<title>Breast Screening Follow-up Agent</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="A working agent demo: Claude reads mammogram reports and patient replies, and plain code tracks every abnormal result until it is resolved.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=Public+Sans:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: one 1180px column under a sticky time bar. Summary, counts by category, then the patient table beside its evidence panel, then the agent's activity, method notes and a live try-it box. */
+:root {
+  --bg: #f5f4f6;
+  --surface: #ffffff;
+  --sunken: #f0eef2;
+  --ink: #1d1a22;
+  --muted: #645d6b;
+  --line: #e0dce4;
+  --line-strong: #c3bcc9;
+  --accent: #a8285a;
+  --accent-soft: #f8e7ee;
+  --on-accent: #ffffff;
+  --done: #2b7549; --done-soft: #e3f2e8;
+  --booked: #2459b8; --booked-soft: #e5edfa;
+  --agent: #6b46c1; --agent-soft: #efe9fb;
+  --person: #9c5600; --person-soft: #fbeedb;
+  --overdue: #b42318; --overdue-soft: #fbe9e7;
+  --wait: #77707e; --wait-soft: #efedf1;
+  --mark: #ffe98a; --mark-ink: #1d1a22;
+  --warn: #ffd2cc; --warn-ink: #5c0f08;
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius: 6px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121015; --surface: #1b181f; --sunken: #16131a; --ink: #ece8f0; --muted: #a59dad; --line: #2c2732; --line-strong: #453e4d;
+    --accent: #f07aa6; --accent-soft: #3a1a28; --on-accent: #121015;
+    --done: #74c995; --done-soft: #13281c; --booked: #86a9ff; --booked-soft: #18233f; --agent: #b49cf5; --agent-soft: #241c3c;
+    --person: #f2b35c; --person-soft: #2d2210; --overdue: #ff8f86; --overdue-soft: #361917; --wait: #a59dad; --wait-soft: #221e27;
+    --mark: #5b4a06; --mark-ink: #fff4c4; --warn: #5c1a14; --warn-ink: #ffd8d2;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121015; --surface: #1b181f; --sunken: #16131a; --ink: #ece8f0; --muted: #a59dad; --line: #2c2732; --line-strong: #453e4d;
+  --accent: #f07aa6; --accent-soft: #3a1a28; --on-accent: #121015;
+  --done: #74c995; --done-soft: #13281c; --booked: #86a9ff; --booked-soft: #18233f; --agent: #b49cf5; --agent-soft: #241c3c;
+  --person: #f2b35c; --person-soft: #2d2210; --overdue: #ff8f86; --overdue-soft: #361917; --wait: #a59dad; --wait-soft: #221e27;
+  --mark: #5b4a06; --mark-ink: #fff4c4; --warn: #5c1a14; --warn-ink: #ffd8d2;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0;
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 28px 64px;
+}
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 1180px; margin: 0 auto; display: grid; gap: 44px; }
+h1, h2, h3, h4 { font-family: var(--font-display); margin: 0; line-height: 1.15; text-wrap: balance; }
+h1 { font-size: clamp(34px, 5.5vw, 50px); font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 26px; font-weight: 600; }
+h3 { font-size: 18px; font-weight: 600; }
+h4 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+p { margin: 0; }
+a { color: var(--accent); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.mono { font-family: var(--font-mono); }
+.muted { color: var(--muted); }
+.eyebrow { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+
+/* Header */
+.top { display: grid; gap: 14px; }
+.lede { font-size: 18px; max-width: 64ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 10px 32px; margin: 4px 0 0; }
+.meta div { display: grid; gap: 2px; }
+.meta dt { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.meta dd { margin: 0; font-weight: 500; }
+
+/* Time bar */
+.player { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 10px; border-bottom: 1px solid var(--line); margin-top: -20px; }
+.player-in { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; }
+.ctrls { display: flex; gap: 6px; }
+.ib { width: 38px; height: 38px; display: inline-grid; place-items: center; border-radius: 50%; border: 1px solid var(--line-strong); background: var(--surface); cursor: pointer; }
+.ib.play { width: 46px; height: 46px; background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.ib svg { width: 16px; height: 16px; fill: currentColor; }
+.ib.play svg { width: 18px; height: 18px; }
+.scrub { display: grid; gap: 4px; min-width: 0; }
+.scrub input { width: 100%; accent-color: var(--accent); }
+.ticks { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 11px; color: var(--muted); }
+.now { text-align: right; min-width: 150px; }
+.now b { display: block; font-family: var(--font-display); font-size: 20px; font-weight: 600; line-height: 1.1; }
+.now span { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+section { display: grid; gap: 16px; }
+.head { display: grid; gap: 6px; }
+.head p { color: var(--muted); max-width: 74ch; }
+
+/* Summary */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.stat { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: grid; gap: 4px; align-content: start; }
+.stat .n { font-family: var(--font-display); font-size: 32px; font-weight: 700; line-height: 1; font-variant-numeric: tabular-nums; }
+.stat .n small { font-size: 18px; font-weight: 600; color: var(--muted); }
+.stat .what { font-weight: 600; }
+.stat .why { font-size: 13.5px; color: var(--muted); }
+
+/* Status chips */
+.st-done { --c: var(--done); --soft: var(--done-soft); }
+.st-booked { --c: var(--booked); --soft: var(--booked-soft); }
+.st-agent { --c: var(--agent); --soft: var(--agent-soft); }
+.st-person { --c: var(--person); --soft: var(--person-soft); }
+.st-overdue { --c: var(--overdue); --soft: var(--overdue-soft); }
+.st-wait { --c: var(--wait); --soft: var(--wait-soft); }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; background: var(--soft); color: var(--c); font-size: 12.5px; font-weight: 600; white-space: nowrap; }
+.chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+.tag { display: inline-block; padding: 1px 7px; border-radius: 4px; border: 1px solid var(--line-strong); font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.tag.claude { border-color: var(--accent); color: var(--accent); }
+
+/* Tables */
+.tbl-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 9px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+tbody tr:last-child td { border-bottom: 0; }
+th { font-family: var(--font-mono); font-size: 11.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); background: var(--sunken); white-space: nowrap; }
+td.num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.counts td.num { text-align: center; }
+.counts th:not(:first-child) { text-align: center; }
+.zero { color: var(--line-strong); }
+.cnt { display: inline-block; min-width: 26px; padding: 1px 8px; border-radius: 999px; background: var(--soft); color: var(--c); font-weight: 600; }
+
+/* Patients */
+.pane { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 16px; align-items: start; }
+.ptable { min-width: 680px; }
+.ptable tr { cursor: pointer; }
+.ptable tbody tr:hover { background: var(--sunken); }
+.ptable tr[aria-selected="true"] { background: var(--accent-soft); }
+.ptable tr[aria-selected="true"] td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.pbtn { border: 0; background: none; padding: 0; text-align: left; cursor: pointer; font-weight: 600; }
+.pbtn small { display: block; font-weight: 400; font-size: 12.5px; color: var(--muted); }
+.late { color: var(--overdue); font-size: 12.5px; font-weight: 600; display: block; }
+.soon { color: var(--muted); font-size: 12.5px; display: block; }
+.last { font-size: 13.5px; color: var(--muted); }
+
+.detail { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; display: grid; gap: 18px; min-width: 0; }
+.d-head { display: grid; gap: 6px; }
+.d-head h3 { font-size: 24px; }
+.d-head .path { font-size: 14px; color: var(--muted); }
+.d-now { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; font-size: 14px; }
+.doc { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.doc-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; padding: 8px 12px; background: var(--sunken); font-size: 13px; }
+.doc-head b { font-weight: 600; }
+.doc pre { margin: 0; padding: 12px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+mark { background: var(--mark); color: var(--mark-ink); padding: 0 2px; border-radius: 2px; }
+mark.warn { background: var(--warn); color: var(--warn-ink); }
+.read { border-top: 1px dashed var(--line-strong); padding: 10px 12px 12px; display: grid; gap: 8px; }
+.kv { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 12px; font-size: 13.5px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+.ok { color: var(--done); font-size: 13px; font-weight: 600; }
+.bad { color: var(--overdue); font-size: 13px; font-weight: 600; }
+.bubble { background: var(--sunken); border-radius: 12px 12px 12px 4px; padding: 10px 12px; font-size: 14px; max-width: 46ch; }
+.reply { display: grid; gap: 6px; }
+.timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; }
+.timeline li { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 13.5px; }
+.timeline li:first-child { border-top: 0; }
+.timeline .when { font-family: var(--font-mono); font-size: 12px; color: var(--muted); padding-top: 1px; }
+.timeline .what { display: grid; gap: 4px; min-width: 0; }
+.timeline .actor { font-family: var(--font-mono); font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.timeline .actor.a-agent { color: var(--agent); }
+.timeline .actor.a-claude { color: var(--accent); }
+.timeline .actor.a-patient { color: var(--booked); }
+.timeline .actor.a-person { color: var(--person); }
+.msg { border-left: 3px solid var(--line-strong); padding-left: 10px; color: var(--ink); }
+
+/* Activity */
+.counters { display: flex; flex-wrap: wrap; gap: 8px; }
+.counter { display: inline-flex; align-items: baseline; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; font-size: 13.5px; }
+.counter b { font-family: var(--font-display); font-size: 18px; font-variant-numeric: tabular-nums; }
+.feed { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); max-height: 380px; overflow-y: auto; }
+.feed ol { list-style: none; margin: 0; padding: 0; }
+.feed li { display: grid; grid-template-columns: 70px 120px minmax(0, 1fr); gap: 12px; padding: 9px 14px; border-top: 1px solid var(--line); font-size: 13.5px; align-items: baseline; }
+.feed li:first-child { border-top: 0; }
+.feed .when { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.feed .who { font-weight: 600; }
+.empty { color: var(--muted); font-size: 14px; padding: 12px 14px; }
+
+/* How it works */
+.steps { margin: 0; padding-left: 22px; display: grid; gap: 8px; max-width: 78ch; }
+.steps b { font-weight: 600; }
+.prose { display: grid; gap: 10px; max-width: 74ch; }
+details.more { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); }
+details.more summary { cursor: pointer; padding: 12px 14px; font-weight: 600; }
+details.more pre { margin: 0; padding: 0 14px 14px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+details.more .tpl { padding: 0 14px 14px; display: grid; gap: 10px; font-size: 14px; }
+details.more .tpl div { display: grid; gap: 2px; }
+.list { margin: 0; padding-left: 20px; display: grid; gap: 6px; max-width: 74ch; }
+
+/* Try it */
+.try { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; display: grid; gap: 12px; }
+.try label { font-weight: 600; font-size: 14px; }
+.try textarea { width: 100%; min-height: 180px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--bg); color: var(--ink); font-family: var(--font-mono); font-size: 13px; line-height: 1.55; resize: vertical; }
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn { border-radius: 4px; padding: 8px 14px; font-weight: 600; cursor: pointer; border: 1px solid var(--line-strong); background: var(--surface); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.try-status { font-size: 14px; color: var(--muted); }
+.try-out { display: grid; gap: 10px; }
+
+.about { border-top: 1px solid var(--line); padding-top: 22px; display: grid; gap: 8px; font-size: 14px; color: var(--muted); max-width: 82ch; }
+
+@media (max-width: 980px) {
+  .pane { grid-template-columns: minmax(0, 1fr); }
+  .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .player-in { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .now { text-align: left; }
+  .ctrls { order: 2; }
+  .feed li { grid-template-columns: 60px minmax(0, 1fr); }
+  .feed .who { grid-column: 2; }
+  .feed .act { grid-column: 2; }
+  .timeline li { grid-template-columns: 52px minmax(0, 1fr); }
+}
+@media (max-width: 420px) { .stats { grid-template-columns: minmax(0, 1fr); } }
+</style>
+<!-- /HEAD -->
+<!-- BODY -->
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">Working demo · synthetic patients · not for clinical use</p>
+    <h1>Breast Screening Follow-up Agent</h1>
+    <p class="lede">Makes sure no woman with an abnormal mammogram gets lost before her result is resolved. Claude reads each report and each patient reply. Code checks those reads, sets the deadlines, decides every follow-up, and hands a case to a person only when a rule says so.</p>
+    <dl class="meta">
+      <div><dt>Simulation</dt><dd>9 patients over 90 days, Sep 1 to Nov 30, 2026</dd></div>
+      <div><dt>Code</dt><dd><a href="https://github.com/nitchakorn/BreastCancerScreening" target="_blank" rel="noopener">github.com/nitchakorn/BreastCancerScreening</a></dd></div>
+      <div><dt>Built by</dt><dd>Nitchakorn · Oct 22, 2026</dd></div>
+    </dl>
+  </header>
+
+  <div class="player" role="group" aria-label="Simulation time">
+    <div class="player-in">
+      <div class="ctrls">
+        <button class="ib" id="back" type="button" aria-label="Back one day"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 2h2v12H3zM14 2v12L6 8z"/></svg></button>
+        <button class="ib play" id="play" type="button" aria-label="Play"><svg viewBox="0 0 16 16" aria-hidden="true" id="play-icon"><path d="M4 2l10 6-10 6z"/></svg></button>
+        <button class="ib" id="fwd" type="button" aria-label="Forward one day"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M11 2h2v12h-2zM2 2v12l8-6z"/></svg></button>
+      </div>
+      <div class="scrub">
+        <input type="range" id="day" min="0" max="90" step="1" value="18" aria-label="Day of the simulation">
+        <div class="ticks" aria-hidden="true"><span>Sep 1</span><span>Oct 1</span><span>Nov 1</span><span>Nov 30</span></div>
+      </div>
+      <div class="now" aria-live="polite"><b id="now-date"></b><span id="now-day"></span></div>
+    </div>
+  </div>
+
+  <section aria-labelledby="sum-h">
+    <div class="head">
+      <h2 id="sum-h">Where things stand</h2>
+      <p>Press play to watch the agent work day by day, or drag the slider. Every number below is as of the date in the bar.</p>
+    </div>
+    <div class="stats" id="stats"></div>
+  </section>
+
+  <section aria-labelledby="cnt-h">
+    <div class="head">
+      <h2 id="cnt-h">Counts by category</h2>
+      <p>Each patient counts under the result that started her case.</p>
+    </div>
+    <div class="tbl-wrap"><table class="counts" id="counts"></table></div>
+  </section>
+
+  <section aria-labelledby="pts-h" id="patients">
+    <div class="head">
+      <h2 id="pts-h">Who has had the next step</h2>
+      <p>One row per patient, most overdue first. Pick a patient to see her reports with Claude's quotes highlighted and her full timeline.</p>
+    </div>
+    <div class="pane">
+      <div class="tbl-wrap"><table class="ptable" id="ptable"></table></div>
+      <div class="detail" id="detail" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="act-h">
+    <div class="head">
+      <h2 id="act-h">What the agent did</h2>
+      <p>Texts sent, replies read, bookings seen, and cases handed to a person with the reason. Newest first.</p>
+    </div>
+    <div class="counters" id="counters"></div>
+    <div class="feed" id="feed"></div>
+  </section>
+
+  <section aria-labelledby="how-h">
+    <div class="head">
+      <h2 id="how-h">How it works</h2>
+      <p>Claude reads. Code decides. A person handles the exceptions.</p>
+    </div>
+    <ol class="steps">
+      <li><b>A new report arrives.</b> This starts the agent.</li>
+      <li><b>Claude reads the report.</b> It returns the BI-RADS category, which breast, the recommended next step, the exam date and the exact words that support each one.</li>
+      <li><b>Code checks the read.</b> Every quote must match the report word for word. If the BI-RADS category is missing, or the findings and the impression disagree, the case goes to a radiologist and stops there.</li>
+      <li><b>Rules pick the pathway and set a due date.</b> See the table below.</li>
+      <li><b>The agent waits and watches.</b> Each day it checks whether the next step was booked or done.</li>
+      <li><b>If the next step isn't booked, the agent reaches out.</b> It texts a booking link and checks the schedule. Claude reads her replies. No ride means a free ride option, and another time means new slots. No answer means a portal message, then an automated call.</li>
+      <li><b>A person steps in only for exceptions.</b> She says she is scared or asks a medical question, turns down care, raises a barrier the agent can't solve, or doesn't answer after three tries.</li>
+      <li><b>A new result comes in and the loop starts again.</b> A diagnostic mammogram or a pathology report goes back through steps 2 to 4.</li>
+      <li><b>The case closes when the result is resolved.</b> Back to routine screening, on a six-month track, or handed to breast surgery after a cancer diagnosis.</li>
+    </ol>
+    <h3>Pathways and deadlines</h3>
+    <div class="tbl-wrap">
+      <table style="min-width:640px">
+        <thead><tr><th>BI-RADS</th><th>Next step</th><th>Due</th><th>Agent outreach starts</th><th>Goes to a person</th></tr></thead>
+        <tbody>
+          <tr><td>1 or 2</td><td>Routine screening</td><td>Next routine screen</td><td>None</td><td>None</td></tr>
+          <tr><td>0 (screening)</td><td>Diagnostic mammogram or ultrasound</td><td>14 days</td><td>As soon as the report is read</td><td>Day 30 if not booked, or any exception</td></tr>
+          <tr><td>3</td><td>Short-interval imaging</td><td>6 months</td><td>1 month before due</td><td>1 month after due, or any exception</td></tr>
+          <tr><td>4 or 5</td><td>Biopsy</td><td>14 days</td><td>As soon as the report is read</td><td>Day 7 if not booked, or any exception. For BI-RADS 5 the navigator also gets a heads-up on day 1, but the case doesn't wait on her.</td></tr>
+          <tr><td>After biopsy</td><td>Pathology result</td><td>10 days after biopsy</td><td>None. The agent never gives results.</td><td>Day 10 if no result</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="prose">
+      <p>The outer limit is 60 days from the abnormal result to resolution, the window a national quality measure uses. The deadlines above are set so a case never gets near it. For BI-RADS 3 there is time, so unanswered reminders keep going until one month after the due date.</p>
+      <p>A person decides any report the agent can't read with confidence, the wording of each message type (approved once before launch), whether a benign biopsy matches the imaging, and any case at the navigator stage. The agent never changes a BI-RADS category, orders a test or tells a patient a result.</p>
+    </div>
+    <details class="more">
+      <summary>The prompt Claude gets for each report</summary>
+      <pre>{{PROMPT_DOC}}</pre>
+    </details>
+    <details class="more">
+      <summary>The prompt Claude gets for each patient reply</summary>
+      <pre>{{PROMPT_REPLY}}</pre>
+    </details>
+    <details class="more">
+      <summary>The messages the agent can send</summary>
+      <div class="tpl" id="templates"></div>
+    </details>
+    <h3>What a real deployment would add</h3>
+    <ul class="list">
+      <li>Real connections: the scheduling system, two-way texting, and the EHR inbox in place of simulated events.</li>
+      <li>Testing the reading step on a few hundred real reports, with radiologists labeling every miss.</li>
+      <li>No-shows and rebooking, plus a language preference for every message.</li>
+      <li>The 60-day rate and days to diagnosis reported per site every week.</li>
+    </ul>
+  </section>
+
+  <section aria-labelledby="try-h">
+    <div class="head">
+      <h2 id="try-h">Try the reading step</h2>
+      <p>Paste any breast imaging or pathology report. Claude reads it with the same prompt, then the same checks and rules run on its answer.</p>
+    </div>
+    <div class="try">
+      <label for="try-text">Report</label>
+      <textarea id="try-text" spellcheck="false"></textarea>
+      <div class="btns">
+        <button class="btn primary" id="try-run" type="button" disabled>Read with Claude</button>
+        <button class="btn" id="try-stop" type="button" hidden>Stop</button>
+        <button class="btn" id="try-reset" type="button">Reset example</button>
+      </div>
+      <p class="try-status" id="try-status">Checking whether live reading is available here…</p>
+      <div class="try-out" id="try-out"></div>
+    </div>
+  </section>
+
+  <footer class="about">
+    <p>All nine patients, their reports, their replies and the simulated events are made up for this demo. Riverside Breast Center is not a real place.</p>
+    <p id="run-line"></p>
+    <p>The page replays that run. Nothing is sent to anyone. Not for clinical use. Built by Nitchakorn with Claude. <a href="https://github.com/nitchakorn/BreastCancerScreening" target="_blank" rel="noopener">Code on GitHub</a>.</p>
+  </footer>
+</div>
+
+<script type="application/json" id="data">{{DATA}}</script>
+<script>
+{{AGENT}}
+</script>
+<script>
+(function () {
+  var A = window.BreastAgent;
+  var DATA = JSON.parse(document.getElementById("data").textContent);
+  var PROMPT_DOC = DATA.prompts.document;
+  var SIM = A.simulate(DATA);
+  var LAST = A.RULES.days;
+  var byId = {}, docsById = {}, repliesById = {};
+  DATA.patients.forEach(function (p) { byId[p.id] = p; });
+  DATA.documents.forEach(function (d) { docsById[d.id] = d; });
+  DATA.replies.forEach(function (r) { repliesById[r.id] = r; });
+  var ST = {
+    overdue: { label: "Overdue", cls: "st-overdue" },
+    person: { label: "With a person", cls: "st-person" },
+    agent: { label: "Agent working", cls: "st-agent" },
+    booked: { label: "Booked", cls: "st-booked" },
+    done: { label: "Done", cls: "st-done" },
+    waiting: { label: "No report yet", cls: "st-wait" }
+  };
+  var COLS = ["done", "booked", "agent", "person", "overdue"];
+  var CATS = [["0", "BI-RADS 0"], ["3", "BI-RADS 3"], ["4-5", "BI-RADS 4 or 5"], ["1-2", "BI-RADS 1 or 2"], ["unclear", "Unclear report"]];
+  var state = { day: 18, sel: "P7", timer: null };
+
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function plural(n, one, many) { return n + " " + (n === 1 ? one : many); }
+  function eventsTo(day) { return SIM.events.filter(function (e) { return e.day <= day; }); }
+
+  /* ---------- time bar ---------- */
+  function setDay(d) {
+    state.day = Math.max(0, Math.min(LAST, d));
+    $("day").value = state.day;
+    render();
+  }
+  function stop() {
+    if (state.timer) { clearInterval(state.timer); state.timer = null; }
+    $("play").setAttribute("aria-label", "Play");
+    $("play-icon").innerHTML = '<path d="M4 2l10 6-10 6z"/>';
+  }
+  function play() {
+    if (state.day >= LAST) setDay(0);
+    $("play").setAttribute("aria-label", "Pause");
+    $("play-icon").innerHTML = '<path d="M3 2h4v12H3zM9 2h4v12H9z"/>';
+    state.timer = setInterval(function () {
+      if (state.day >= LAST) { stop(); return; }
+      setDay(state.day + 1);
+    }, 380);
+  }
+  $("play").addEventListener("click", function () { if (state.timer) stop(); else play(); });
+  $("back").addEventListener("click", function () { stop(); setDay(state.day - 1); });
+  $("fwd").addEventListener("click", function () { stop(); setDay(state.day + 1); });
+  $("day").addEventListener("input", function () { stop(); setDay(Number($("day").value)); });
+
+  /* ---------- summary ---------- */
+  function renderStats(snap, evs) {
+    var abnormal = DATA.patients.filter(function (p) { return ["0", "4-5", "unclear"].indexOf(snap[p.id].cat) >= 0; });
+    var resolved = abnormal.filter(function (p) { return snap[p.id].resolvedDays !== null; });
+    var within = resolved.filter(function (p) { return snap[p.id].resolvedDays <= A.RULES.measureWindowDays; });
+    var days = resolved.map(function (p) { return snap[p.id].resolvedDays; }).sort(function (a, b) { return a - b; });
+    var median = days.length ? (days.length % 2 ? days[(days.length - 1) / 2] : (days[days.length / 2 - 1] + days[days.length / 2]) / 2) : null;
+    var started = DATA.patients.filter(function (p) { return snap[p.id].status !== "waiting"; });
+    var people = started.filter(function (p) { return snap[p.id].neededPerson; });
+    var outreach = evs.filter(function (e) { return e.actor === "agent" && (e.kind === "text" || e.kind === "portal" || e.kind === "call"); }).length;
+    var readN = evs.filter(function (e) { return e.kind === "read" || e.kind === "readreply"; }).length;
+    var open = abnormal.length - resolved.length;
+    var stats = [
+      { n: within.length + " <small>of " + abnormal.length + "</small>", what: "Resolved within 60 days", why: abnormal.length ? "Abnormal results (BI-RADS 0, 4, 5 or unclear)" + (open ? ". " + plural(open, "is", "are") + " still open." : ". None open.") : "No abnormal results yet." },
+      { n: median === null ? "None" : median + " <small>days</small>", what: "Median time to resolution", why: "From the abnormal result to a resolved one." },
+      { n: people.length + " <small>of " + started.length + "</small>", what: "Needed a person", why: "Handed over for an exception or an unclear report." },
+      { n: outreach + " <small>sent</small>", what: "Agent outreach", why: "Texts, portal messages and calls. Claude read " + plural(readN, "report or reply", "reports and replies") + "." }
+    ];
+    $("stats").innerHTML = stats.map(function (s) { return '<div class="stat"><span class="n">' + s.n + '</span><span class="what">' + esc(s.what) + '</span><span class="why">' + esc(s.why) + "</span></div>"; }).join("");
+  }
+
+  /* ---------- counts ---------- */
+  function renderCounts(snap) {
+    var waiting = DATA.patients.filter(function (p) { return snap[p.id].status === "waiting"; }).length;
+    var head = "<thead><tr><th>Started as</th><th>Patients</th>" + COLS.map(function (c) { return "<th>" + esc(ST[c].label) + "</th>"; }).join("") + "</tr></thead>";
+    var body = CATS.map(function (cat) {
+      var ps = DATA.patients.filter(function (p) { return snap[p.id].cat === cat[0] && snap[p.id].status !== "waiting"; });
+      return "<tr><td>" + esc(cat[1]) + '</td><td class="num">' + (ps.length || '<span class="zero">0</span>') + "</td>" + COLS.map(function (c) {
+        var n = ps.filter(function (p) { return snap[p.id].status === c; }).length;
+        return '<td class="num">' + (n ? '<span class="cnt ' + ST[c].cls + '">' + n + "</span>" : '<span class="zero">0</span>') + "</td>";
+      }).join("") + "</tr>";
+    }).join("");
+    var foot = waiting ? '<tfoot><tr><td colspan="7" class="muted" style="border-bottom:0;font-size:13px">' + plural(waiting, "patient has", "patients have") + " no report yet.</td></tr></tfoot>" : "";
+    $("counts").innerHTML = head + "<tbody>" + body + "</tbody>" + foot;
+  }
+
+  /* ---------- patient table ---------- */
+  var RANK = { overdue: 0, person: 1, agent: 2, booked: 3, done: 4, waiting: 5 };
+  function renderTable(snap) {
+    var rows = DATA.patients.slice().sort(function (a, b) {
+      var sa = snap[a.id], sb = snap[b.id];
+      if (RANK[sa.status] !== RANK[sb.status]) return RANK[sa.status] - RANK[sb.status];
+      if (sa.status === "overdue") return sb.overdueDays - sa.overdueDays;
+      return (sa.due || "9999") < (sb.due || "9999") ? -1 : (sa.due || "9999") > (sb.due || "9999") ? 1 : 0;
+    });
+    var head = "<thead><tr><th>Patient</th><th>BI-RADS</th><th>Next step</th><th>Due</th><th>Status</th><th>Last agent action</th></tr></thead>";
+    var body = rows.map(function (p) {
+      var s = snap[p.id], st = ST[s.status];
+      var bi = s.status === "waiting" ? "" : (s.personKind === "hold" ? "Held" : (s.birads || ""));
+      var due = s.due ? A.fmtShort(s.due) + (s.due.slice(0, 4) !== "2026" ? ", " + s.due.slice(0, 4) : "") : "";
+      var dueNote = s.status === "overdue" ? '<span class="late">' + plural(s.overdueDays, "day", "days") + " late</span>" : (s.booked && s.status !== "done" ? '<span class="soon">Booked for ' + A.fmtShort(s.booked) + "</span>" : "");
+      var step = s.status === "waiting" ? '<span class="muted">Report arrives ' + A.fmtShort(p.arrives) + "</span>" : esc(s.step || "");
+      return '<tr data-id="' + p.id + '" aria-selected="' + (state.sel === p.id) + '"><td><button type="button" class="pbtn" data-id="' + p.id + '">' + esc(p.name) + "<small>" + p.id + " · " + p.age + "</small></button></td><td class=\"num\">" + esc(bi) + "</td><td>" + step + "</td><td>" + esc(due) + dueNote + '</td><td><span class="chip ' + st.cls + '">' + esc(s.status === "person" && s.person ? "With " + shortWho(s.person) : st.label) + '</span></td><td class="last">' + esc(s.lastAgent || "") + "</td></tr>";
+    }).join("");
+    $("ptable").innerHTML = head + "<tbody>" + body + "</tbody>";
+  }
+  function shortWho(who) { return who === "Nurse navigator" ? "the navigator" : who === "Radiologist" ? "a radiologist" : who === "Breast surgery team" ? "breast surgery" : "a person"; }
+  $("ptable").addEventListener("click", function (e) {
+    var tr = e.target.closest("tr[data-id]");
+    if (tr) { state.sel = tr.getAttribute("data-id"); render(); }
+  });
+
+  /* ---------- detail ---------- */
+  function highlight(text, quotes, warn) {
+    var ranges = [];
+    quotes.forEach(function (q) { if (q) { var i = text.indexOf(q); if (i >= 0) ranges.push([i, i + q.length, false]); } });
+    if (warn) { var j = text.indexOf(warn); if (j >= 0) ranges.push([j, j + warn.length, true]); }
+    ranges.sort(function (a, b) { return a[0] - b[0]; });
+    var out = "", pos = 0;
+    ranges.forEach(function (r) {
+      if (r[0] < pos) return;
+      out += esc(text.slice(pos, r[0])) + "<mark" + (r[2] ? ' class="warn"' : "") + ">" + esc(text.slice(r[0], r[1])) + "</mark>";
+      pos = r[1];
+    });
+    return out + esc(text.slice(pos));
+  }
+  function readBlock(doc, r, check) {
+    if (!r) return "";
+    var rows = [];
+    if (doc.kind === "pathology") {
+      rows.push(["Result", r.pathology_result], ["Diagnosis", r.diagnosis], ["Procedure date", A.fmt(r.exam_date)], ["Side", r.side]);
+    } else {
+      rows.push(["BI-RADS", r.birads == null ? "Not stated" : r.birads], ["Side", r.side], ["Next step", r.next_step], ["Exam date", A.fmt(r.exam_date)], ["Findings fit the impression", r.findings_match_impression === false ? "No" : "Yes"]);
+    }
+    return '<div class="read"><h4>What Claude read</h4><dl class="kv">' + rows.filter(function (x) { return x[1]; }).map(function (x) { return "<dt>" + esc(x[0]) + "</dt><dd>" + esc(x[1]) + "</dd>"; }).join("") + "</dl>" +
+      (check ? '<p class="' + (check.ok ? "ok" : "bad") + '">' + esc(check.text) + "</p>" : "") + "</div>";
+  }
+  function actorOf(e) {
+    if (e.kind === "read" || e.kind === "readreply") return ["Claude", "a-claude"];
+    if (e.actor === "agent") return ["Agent", "a-agent"];
+    if (e.actor === "patient") return [byId[e.patient].first, "a-patient"];
+    if (e.actor === "person") return [e.who || "Person", "a-person"];
+    return ["Schedule", ""];
+  }
+  function renderDetail(evs, snap) {
+    var p = byId[state.sel], s = snap[p.id], st = ST[s.status];
+    var mine = evs.filter(function (e) { return e.patient === p.id; });
+    var html = '<div class="d-head"><h3>' + esc(p.name) + ' <span class="muted" style="font-weight:500">' + p.age + "</span></h3><p class=\"path\">" + esc(p.id + ". " + p.path) + '</p><div class="d-now"><span class="chip ' + st.cls + '">' + esc(st.label) + "</span>" +
+      (s.status === "waiting" ? '<span class="muted">Her first report arrives ' + esc(A.fmt(p.arrives)) + ".</span>" : (s.outcome ? "<span>" + esc(s.outcome) + "</span>" : (s.step ? "<span>" + esc(s.step) + (s.due ? ", due " + esc(A.fmt(s.due)) : "") + "</span>" : ""))) +
+      (s.person && s.status !== "done" ? '<span class="muted">With the ' + esc(s.person.toLowerCase()) + "</span>" : "") + "</div></div>";
+    if (s.status === "waiting") { $("detail").innerHTML = html; return; }
+    var docIds = mine.filter(function (e) { return e.kind === "doc"; }).map(function (e) { return e.doc; });
+    html += "<div><h4>Reports</h4></div>" + docIds.map(function (id) {
+      var d = docsById[id], r = DATA.reads.documents[id];
+      var chk = mine.filter(function (e) { return e.kind === "check" && e.doc === id; })[0];
+      var q = r && r.quotes ? Object.keys(r.quotes).map(function (k) { return r.quotes[k]; }) : [];
+      return '<article class="doc"><div class="doc-head"><b>' + esc(d.title) + '</b><span class="muted">' + esc(A.fmt(d.date)) + "</span></div><pre>" + highlight(d.text, q, r && r.mismatch_quote) + "</pre>" + readBlock(d, r, chk ? { ok: chk.ok, text: chk.text } : null) + "</article>";
+    }).join("");
+    var reps = mine.filter(function (e) { return e.kind === "reply"; });
+    if (reps.length) {
+      html += "<div><h4>Her replies</h4></div>" + reps.map(function (e) {
+        var r = DATA.reads.replies[e.reply];
+        return '<div class="reply"><div class="bubble">' + esc(repliesById[e.reply].text) + '</div><p style="font-size:13.5px"><span class="tag claude">Claude</span> ' + esc(r ? r.summary : "") + ' <span class="muted mono" style="font-size:12px">' + esc(r ? r.labels.join(", ") : "") + "</span></p></div>";
+      }).join("");
+    }
+    html += '<div><h4>Timeline</h4><ol class="timeline">' + mine.map(function (e) {
+      var a = actorOf(e);
+      var isMsg = e.actor === "agent" && (e.kind === "text" || e.kind === "portal" || e.kind === "call");
+      var label = isMsg ? (e.kind === "text" ? "Text sent" : e.kind === "portal" ? "Portal message" : "Automated call") : "";
+      return '<li><span class="when">' + esc(A.fmtShort(e.date)) + '</span><span class="what"><span class="actor ' + a[1] + '">' + esc(a[0]) + "</span>" +
+        (isMsg ? "<span>" + esc(label) + '</span><span class="msg">' + esc(e.text) + "</span>" : e.actor === "patient" ? '<span class="msg">' + esc(e.text) + "</span>" : "<span>" + esc(e.text) + "</span>") + "</span></li>";
+    }).join("") + "</ol></div>";
+    $("detail").innerHTML = html;
+  }
+
+  /* ---------- activity ---------- */
+  var FEED_KINDS = { text: 1, portal: 1, call: 1, readreply: 1, booked: 1, handoff: 1, headsup: 1, pcp: 1, close: 1, overdue: 1 };
+  function renderActivity(evs) {
+    var agentEv = evs.filter(function (e) { return e.actor === "agent"; });
+    function count(f) { return agentEv.filter(f).length; }
+    var counters = [
+      ["Texts", count(function (e) { return e.kind === "text"; })],
+      ["Portal messages", count(function (e) { return e.kind === "portal"; })],
+      ["Automated calls", count(function (e) { return e.kind === "call"; })],
+      ["Replies read", count(function (e) { return e.kind === "readreply"; })],
+      ["Bookings seen", count(function (e) { return e.kind === "booked"; })],
+      ["Handed to a person", count(function (e) { return e.kind === "handoff" && (e.handoffKind === "exception" || e.handoffKind === "hold"); })]
+    ];
+    $("counters").innerHTML = counters.map(function (c) { return '<span class="counter"><b>' + c[1] + "</b>" + esc(c[0]) + "</span>"; }).join("");
+    var list = agentEv.filter(function (e) { return FEED_KINDS[e.kind]; }).slice().reverse();
+    $("feed").innerHTML = list.length ? "<ol>" + list.map(function (e) {
+      var text = e.kind === "handoff" ? e.text : e.short;
+      return '<li><span class="when">' + esc(A.fmtShort(e.date)) + '</span><span class="who">' + esc(byId[e.patient].name) + '</span><span class="act">' + esc(text) + "</span></li>";
+    }).join("") + "</ol>" : '<p class="empty">Nothing yet.</p>';
+  }
+
+  function render() {
+    var snap = SIM.snapshots[state.day], evs = eventsTo(state.day), date = A.dateOf(state.day);
+    $("now-date").textContent = A.weekday(date) + ", " + A.fmt(date);
+    $("now-day").textContent = "Day " + state.day + " of " + LAST;
+    renderStats(snap, evs);
+    renderCounts(snap);
+    renderTable(snap);
+    renderDetail(evs, snap);
+    renderActivity(evs);
+  }
+
+  /* ---------- static bits ---------- */
+  var demo = { patient: { first: "Maria" } };
+  $("templates").innerHTML = [
+    ["Booking text, imaging", "book_imaging"], ["Booking text, biopsy", "book_biopsy"], ["Booking text, 6-month follow-up", "book_6mo"],
+    ["Portal message", "portal"], ["Automated call", "call"], ["Check-in text", "nudge"], ["Ride option", "transport"], ["Other times", "slots"], ["Appointment reminder", "appt_reminder"]
+  ].map(function (t) { return "<div><b>" + esc(t[0]) + '</b><span class="muted">' + esc(A.message(t[1], demo, { due: "2026-10-08", appt: "2026-10-08" })) + "</span></div>"; }).join("");
+  var run = DATA.run;
+  $("run-line").textContent = "Claude read " + DATA.documents.length + " reports and " + DATA.replies.length + " replies on " + A.fmt(run.date) + " with " + run.modelName + ": " + run.calls + " calls, about " + Math.round(run.median_seconds) + " seconds each, about " + Math.round(run.total_cost_usd * 100) + " cents in total. Code checked every quote against its source.";
+
+  render();
+
+  /* ---------- try it live ---------- */
+  var EXAMPLE = "EXAM: Targeted left breast ultrasound\nDATE: 10/19/2026\nINDICATION: Recall from screening 10/12/2026 for a left breast mass.\nFINDINGS: At 4 o'clock, 2 cm from the nipple, there is an 8 mm irregular hypoechoic mass with microlobulated margins.\nIMPRESSION: Suspicious left breast mass. BI-RADS 4A: Low suspicion for malignancy.\nRECOMMENDATION: Ultrasound-guided core needle biopsy.";
+  var ta = $("try-text"), runBtn = $("try-run"), stopBtn = $("try-stop"), st = $("try-status"), out = $("try-out"), sample = null, ctl = null;
+  ta.value = EXAMPLE;
+  $("try-reset").addEventListener("click", function () { ta.value = EXAMPLE; out.innerHTML = ""; });
+  function unavailable() {
+    st.textContent = "Live reading isn't available here. It works when this page is opened inside claude.ai by a signed-in viewer, on that viewer's own Claude account. The simulation above replays a recorded run with the same prompt.";
+    runBtn.disabled = true;
+  }
+  if (!window.claude || typeof window.claude.use !== "function") unavailable();
+  else window.claude.use("sample").then(function (s) {
+    sample = s;
+    if (!s) return unavailable();
+    runBtn.disabled = false;
+    st.textContent = "Ready. Reading uses your own Claude account. Claude asks once before the first call.";
+  }, unavailable);
+  function errCopy(code) {
+    return ({ not_granted: "Claude isn't available for this page in your account.", sampling_disabled: "Claude isn't available for this page in your account.", rate_limited: "Too many requests right now. Try again in a minute.",
+      session_expired: "Sign in to claude.ai again, then try once more.", invalid_json: "Claude's answer couldn't be read as data. Try again.", refused: "Claude declined this text. Try a different report.",
+      prompt_too_large: "That report is too long. Paste a shorter part.", cancelled: "Stopped." })[code] || "Something went wrong. Try again.";
+  }
+  runBtn.addEventListener("click", function () {
+    if (!sample) return;
+    var text = ta.value.trim();
+    if (!text) { st.textContent = "Paste a report first."; return; }
+    ctl = new AbortController();
+    runBtn.disabled = true; stopBtn.hidden = false; out.innerHTML = ""; st.textContent = "Reading…";
+    sample.json(PROMPT_DOC + "\n\nDocument:\n" + text.slice(0, 12000), { signal: ctl.signal }).then(function (r) {
+      var doc = { kind: r && r.doc_type === "pathology" ? "pathology" : "imaging", text: text, title: "Pasted report", date: (r && r.exam_date) || "" };
+      var problems = A.checkRead(doc, r);
+      var verdict;
+      if (problems.length) verdict = "Checks failed: " + problems.join(" ") + " The case would go to a radiologist and stop there.";
+      else if (doc.kind === "pathology") verdict = r.pathology_result === "malignant" ? "Checks passed. Malignant: the case would be handed to breast surgery and the PCP told." : "Checks passed. " + r.pathology_result + ": a person would confirm it matches the imaging.";
+      else {
+        var b = A.normBirads(r.birads), pw = A.pathwayFor(b), exam = r.exam_date;
+        verdict = "Checks passed. " + (pw === "routine" ? "Routine screening. No outreach." :
+          pw === "diagnostic" ? "Diagnostic imaging due " + A.fmt(A.addDays(exam, 14)) + ". The agent would text her a booking link today." :
+          pw === "biopsy" ? "Biopsy due " + A.fmt(A.addDays(exam, 14)) + ". The agent would text her today" + (b === "5" ? " and give the navigator a heads-up" : "") + ", and a person takes over on day 7 if she hasn't booked." :
+          pw === "shortInterval" ? "6-month imaging due " + A.fmt(A.addMonths(exam, 6)) + ". Reminders would start a month before." : "No pathway for this category. A person decides.");
+      }
+      out.innerHTML = '<article class="doc"><div class="doc-head"><b>Your report</b><span class="muted">' + esc(r && r.exam_date ? A.fmt(r.exam_date) : "") + "</span></div><pre>" + highlight(text, r && r.quotes ? Object.keys(r.quotes).map(function (k) { return r.quotes[k]; }) : [], r && r.mismatch_quote) + "</pre>" + readBlock(doc, r, { ok: !problems.length, text: verdict }) + "</article>";
+      st.textContent = "Done.";
+    }, function (e) { st.textContent = errCopy(e && e.code); }).then(function () { runBtn.disabled = false; stopBtn.hidden = true; });
+  });
+  stopBtn.addEventListener("click", function () { if (ctl) ctl.abort(); });
+})();
+</script>
+<!-- /BODY -->

@@ -1,0 +1,70 @@
+[
+  {
+    "id": "P1-screen", "patient": "P1", "kind": "imaging", "title": "Screening mammogram", "date": "2026-09-02",
+    "text": "EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/02/2026\nHISTORY: 52-year-old woman, annual screening. No breast complaints.\nCOMPARISON: 08/27/2025, 08/22/2024.\nBREAST DENSITY: Scattered areas of fibroglandular density.\nFINDINGS: No suspicious mass, calcifications or architectural distortion in either breast. No change from prior studies.\nIMPRESSION: Negative. BI-RADS 1: Negative.\nRECOMMENDATION: Routine screening mammogram in 1 year."
+  },
+  {
+    "id": "P2-screen", "patient": "P2", "kind": "imaging", "title": "Screening mammogram", "date": "2026-09-01",
+    "text": "EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/01/2026\nHISTORY: 47-year-old woman, annual screening.\nCOMPARISON: 08/19/2025.\nBREAST DENSITY: Heterogeneously dense, which may obscure small masses.\nFINDINGS: In the right breast, upper outer quadrant, posterior depth, there is a focal asymmetry seen on the CC view only. No suspicious calcifications. The left breast is unremarkable.\nIMPRESSION: Right breast focal asymmetry. BI-RADS 0: Incomplete. Need additional imaging evaluation.\nRECOMMENDATION: Diagnostic mammogram of the right breast with spot compression views, and ultrasound if needed."
+  },
+  {
+    "id": "P2-dx", "patient": "P2", "kind": "imaging", "title": "Diagnostic mammogram and ultrasound", "date": "2026-09-10",
+    "text": "EXAM: Diagnostic mammogram, right breast, with spot compression views. Targeted right breast ultrasound.\nDATE: 09/10/2026\nINDICATION: Recall from screening 09/01/2026 for a right breast focal asymmetry.\nFINDINGS: Spot compression views show the asymmetry corresponds to an 8 mm circumscribed oval mass with a fatty hilum. Targeted ultrasound confirms an intramammary lymph node with normal cortical thickness.\nIMPRESSION: Benign intramammary lymph node, right breast. BI-RADS 2: Benign.\nRECOMMENDATION: Return to annual screening."
+  },
+  {
+    "id": "P3-screen", "patient": "P3", "kind": "imaging", "title": "Screening mammogram", "date": "2026-09-03",
+    "text": "EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/03/2026\nHISTORY: 61-year-old woman, screening. Last mammogram 2023.\nCOMPARISON: 06/14/2023.\nBREAST DENSITY: Scattered areas of fibroglandular density.\nFINDINGS: In the left breast at 3 o'clock, middle depth, there is a new 1.4 cm circumscribed oval mass. No associated calcifications. The right breast is unremarkable.\nIMPRESSION: New left breast mass. BI-RADS 0: Incomplete. Need additional imaging evaluation.\nRECOMMENDATION: Diagnostic mammogram and targeted ultrasound of the left breast."
+  },
+  {
+    "id": "P3-dx", "patient": "P3", "kind": "imaging", "title": "Diagnostic mammogram and ultrasound", "date": "2026-09-08",
+    "text": "EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound.\nDATE: 09/08/2026\nINDICATION: Recall from screening 09/03/2026 for a left breast mass.\nFINDINGS: The left breast mass at 3 o'clock persists on additional views. Targeted ultrasound shows a 1.4 cm anechoic, circumscribed mass with posterior acoustic enhancement, consistent with a simple cyst.\nIMPRESSION: Simple cyst, left breast. BI-RADS 2: Benign.\nRECOMMENDATION: Return to annual screening."
+  },
+  {
+    "id": "P4-screen", "patient": "P4", "kind": "imaging", "title": "Screening mammogram", "date": "2026-09-14",
+    "text": "EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/14/2026\nHISTORY: 55-year-old woman, annual screening.\nCOMPARISON: 09/03/2025.\nBREAST DENSITY: Scattered areas of fibroglandular density.\nFINDINGS: In the right breast, upper inner quadrant, there is a new 6 mm group of amorphous calcifications. The left breast is unremarkable.\nIMPRESSION: New right breast calcifications. BI-RADS 0: Incomplete. Need additional imaging evaluation.\nRECOMMENDATION: Diagnostic mammogram of the right breast with magnification views."
+  },
+  {
+    "id": "P4-dx", "patient": "P4", "kind": "imaging", "title": "Diagnostic mammogram", "date": "2026-09-25",
+    "text": "EXAM: Diagnostic mammogram, right breast, with magnification views.\nDATE: 09/25/2026\nINDICATION: Recall from screening 09/14/2026 for right breast calcifications.\nFINDINGS: Magnification views show the calcifications are round and smudgy on the CC view and layer into crescent shapes on the true lateral view, consistent with milk of calcium in benign microcysts.\nIMPRESSION: Benign calcifications, right breast. BI-RADS 2: Benign.\nRECOMMENDATION: Return to annual screening."
+  },
+  {
+    "id": "P5-apr", "patient": "P5", "kind": "imaging", "title": "Diagnostic mammogram and ultrasound", "date": "2026-04-08",
+    "text": "EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound.\nDATE: 04/08/2026\nINDICATION: Recall from screening 03/30/2026 for a left breast mass.\nFINDINGS: At 10 o'clock, 4 cm from the nipple, there is a 9 mm oval, circumscribed, hypoechoic mass oriented parallel to the skin, without posterior features. No prior study shows this area.\nIMPRESSION: Probably benign left breast mass, likely a fibroadenoma. BI-RADS 3: Probably benign.\nRECOMMENDATION: Short-interval follow-up diagnostic mammogram and ultrasound of the left breast in 6 months."
+  },
+  {
+    "id": "P5-6mo", "patient": "P5", "kind": "imaging", "title": "6-month follow-up mammogram and ultrasound", "date": "2026-10-08",
+    "text": "EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound. 6-month follow-up.\nDATE: 10/08/2026\nCOMPARISON: 04/08/2026.\nFINDINGS: The 9 mm oval circumscribed mass at 10 o'clock is unchanged in size and appearance.\nIMPRESSION: Stable probably benign left breast mass. BI-RADS 3: Probably benign.\nRECOMMENDATION: Continued follow-up with diagnostic mammogram and ultrasound of the left breast in 6 months."
+  },
+  {
+    "id": "P6-apr", "patient": "P6", "kind": "imaging", "title": "Diagnostic ultrasound", "date": "2026-04-15",
+    "text": "EXAM: Targeted right breast ultrasound.\nDATE: 04/15/2026\nINDICATION: Recall from screening 04/06/2026 for a right breast mass.\nFINDINGS: At 7 o'clock, 3 cm from the nipple, there is a 7 mm oval, circumscribed, hypoechoic mass oriented parallel to the skin.\nIMPRESSION: Probably benign right breast mass. BI-RADS 3: Probably benign.\nRECOMMENDATION: Follow-up right breast ultrasound in 6 months."
+  },
+  {
+    "id": "P7-dx", "patient": "P7", "kind": "imaging", "title": "Diagnostic mammogram and ultrasound", "date": "2026-09-14",
+    "text": "EXAM: Diagnostic mammogram, left breast. Targeted left breast ultrasound.\nDATE: 09/14/2026\nINDICATION: 44-year-old woman with a new lump in the left breast, found by the patient.\nFINDINGS: At the site of the lump, left breast 1 o'clock, 5 cm from the nipple, there is a 1.6 cm oval hypoechoic mass with partly indistinct margins and internal vascularity.\nIMPRESSION: Suspicious left breast mass. BI-RADS 4B: Moderate suspicion for malignancy.\nRECOMMENDATION: Ultrasound-guided core needle biopsy of the left breast mass. The recommendation was discussed with the patient."
+  },
+  {
+    "id": "P7-path", "patient": "P7", "kind": "pathology", "title": "Pathology report", "date": "2026-09-24",
+    "text": "SURGICAL PATHOLOGY REPORT\nSPECIMEN: Left breast, 1 o'clock, ultrasound-guided core needle biopsy\nPROCEDURE DATE: 09/21/2026\nDIAGNOSIS: Fibroadenoma. Negative for atypia and malignancy.\nCOMMENT: Findings discussed with the breast imaging team for radiology-pathology correlation."
+  },
+  {
+    "id": "P8-dx", "patient": "P8", "kind": "imaging", "title": "Diagnostic mammogram and ultrasound", "date": "2026-09-16",
+    "text": "EXAM: Diagnostic mammogram, right breast. Targeted right breast ultrasound.\nDATE: 09/16/2026\nINDICATION: 67-year-old woman with a new lump in the right breast, found by the patient.\nFINDINGS: In the right breast at 10 o'clock, 6 cm from the nipple, there is a 2.1 cm irregular mass with spiculated margins and associated fine pleomorphic calcifications. Ultrasound shows a corresponding irregular, non-parallel hypoechoic mass with angular margins. No suspicious right axillary lymph nodes.\nIMPRESSION: Highly suspicious right breast mass. BI-RADS 5: Highly suggestive of malignancy.\nRECOMMENDATION: Ultrasound-guided core needle biopsy of the right breast mass. The findings were discussed with the patient."
+  },
+  {
+    "id": "P8-path", "patient": "P8", "kind": "pathology", "title": "Pathology report", "date": "2026-09-24",
+    "text": "SURGICAL PATHOLOGY REPORT\nSPECIMEN: Right breast, 10 o'clock, ultrasound-guided core needle biopsy\nPROCEDURE DATE: 09/21/2026\nDIAGNOSIS: Invasive ductal carcinoma, Nottingham grade 2.\nBIOMARKERS: Estrogen receptor positive. Progesterone receptor positive. HER2 negative."
+  },
+  {
+    "id": "P9-screen", "patient": "P9", "kind": "imaging", "title": "Screening mammogram", "date": "2026-09-22",
+    "text": "EXAM: Bilateral screening mammogram with tomosynthesis\nDATE: 09/22/2026\nHISTORY: 63-year-old woman, annual screening.\nCOMPARISON: 09/15/2025.\nBREAST DENSITY: Heterogeneously dense, which may obscure small masses.\nFINDINGS: In the left breast at 2 o'clock, middle depth, there is a possible new 1.1 cm irregular mass with indistinct margins, seen on the CC view only. The right breast is unremarkable.\nIMPRESSION: Negative. BI-RADS 1: Negative.\nRECOMMENDATION: Routine screening mammogram in 1 year."
+  },
+  {
+    "id": "P9-addendum", "patient": "P9", "kind": "addendum", "title": "Report addendum", "date": "2026-09-23",
+    "text": "ADDENDUM to the screening mammogram of 09/22/2026\nDATE OF ADDENDUM: 09/23/2026\nThe original impression was entered in error. The possible new 1.1 cm irregular mass in the left breast at 2 o'clock needs further evaluation.\nCORRECTED IMPRESSION: BI-RADS 0: Incomplete. Need additional imaging evaluation.\nRECOMMENDATION: Diagnostic mammogram and targeted ultrasound of the left breast."
+  },
+  {
+    "id": "P9-dx", "patient": "P9", "kind": "imaging", "title": "Diagnostic mammogram and ultrasound", "date": "2026-09-29",
+    "text": "EXAM: Diagnostic mammogram, left breast, with spot compression views. Targeted left breast ultrasound.\nDATE: 09/29/2026\nINDICATION: Recall from screening 09/22/2026 for a possible left breast mass.\nFINDINGS: Spot compression views of the left breast at 2 o'clock show the finding disperses, consistent with overlapping fibroglandular tissue. Targeted ultrasound at 2 o'clock shows normal fibroglandular tissue without a mass.\nIMPRESSION: No mammographic or sonographic abnormality. BI-RADS 1: Negative.\nRECOMMENDATION: Return to annual screening."
+  }
+]

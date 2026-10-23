@@ -1,0 +1,291 @@
+{
+  "P1-screen": {
+    "doc_type": "screening",
+    "exam_date": "2026-09-02",
+    "side": "both",
+    "birads": "1",
+    "next_step": "Routine screening mammogram in 1 year",
+    "findings_match_impression": true,
+    "mismatch_quote": null,
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "DATE: 09/02/2026",
+      "birads": "BI-RADS 1: Negative",
+      "next_step": "Routine screening mammogram in 1 year",
+      "pathology_result": null
+    }
+  },
+  "P2-screen": {
+    "doc_type": "screening",
+    "exam_date": "2026-09-01",
+    "side": "both",
+    "birads": "0",
+    "next_step": "Diagnostic mammogram of right breast with spot compression, ultrasound if needed",
+    "findings_match_impression": true,
+    "mismatch_quote": null,
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "DATE: 09/01/2026",
+      "birads": "BI-RADS 0: Incomplete.",
+      "next_step": "Diagnostic mammogram of the right breast with spot compression views, and ultrasound if needed.",
+      "pathology_result": null
+    }
+  },
+  "P2-dx": {
+    "doc_type": "diagnostic",
+    "exam_date": "2026-09-10",
+    "side": "right",
+    "birads": "2",
+    "next_step": "Return to annual screening",
+    "findings_match_impression": true,
+    "mismatch_quote": null,
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "DATE: 09/10/2026",
+      "birads": "BI-RADS 2: Benign",
+      "next_step": "Return to annual screening",
+      "pathology_result": null
+    }
+  },
+  "P3-screen": {
+    "doc_type": "screening",
+    "exam_date": "2026-09-03",
+    "side": "both",
+    "birads": "0",
+    "next_step": "Diagnostic mammogram and targeted ultrasound of the left breast",
+    "findings_match_impression": true,
+    "mismatch_quote": null,
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "DATE: 09/03/2026",
+      "birads": "BI-RADS 0: Incomplete.",
+      "next_step": "Diagnostic mammogram and targeted ultrasound of the left breast.",
+      "pathology_result": null
+    }
+  },
+  "P3-dx": {
+    "doc_type": "diagnostic",
+    "exam_date": "2026-09-08",
+    "side": "left",
+    "birads": "2",
+    "next_step": "Return to annual screening",
+    "findings_match_impression": true,
+    "mismatch_quote": null,
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "DATE: 09/08/2026",
+      "birads": "BI-RADS 2: Benign",
+      "next_step": "Return to annual screening.",
+      "pathology_result": null
+    }
+  },
+  "P4-screen": {
+    "doc_type": "screening",
+    "exam_date": "2026-09-14",
+    "side": "both",
+    "birads": "0",
+    "next_step": "Diagnostic mammogram of right breast with magnification views",
+    "findings_match_impression": true,
+    "mismatch_quote": null,
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "DATE: 09/14/2026",
+      "birads": "BI-RADS 0: Incomplete.",
+      "next_step": "Diagnostic mammogram of the right breast with magnification views.",
+      "pathology_result": null
+    }
+  },
+  "P4-dx": {
+    "doc_type": "diagnostic",
+    "exam_date": "2026-09-25",
+    "side": "right",
+    "birads": "2",
+    "next_step": "Return to annual screening",
+    "findings_match_impression": true,
+    "mismatch_quote": null,
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "DATE: 09/25/2026",
+      "birads": "BI-RADS 2: Benign",
+      "next_step": "Return to annual screening",
+      "pathology_result": null
+    }
+  },
+  "P5-apr": {
+    "doc_type": "diagnostic",
+    "exam_date": "2026-04-08",
+    "side": "left",
+    "birads": "3",
+    "next_step": "Short-interval follow-up diagnostic mammogram and ultrasound of left breast in 6 months",
+    "findings_match_impression": true,
+    "mismatch_quote": null,
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "DATE: 04/08/2026",
+      "birads": "BI-RADS 3: Probably benign.",
+      "next_step": "Short-interval follow-up diagnostic mammogram and ultrasound of the left breast in 6 months.",
+      "pathology_result": null
+    }
+  },
+  "P5-6mo": {
+    "doc_type": "diagnostic",
+    "exam_date": "2026-10-08",
+    "side": "left",
+    "birads": "3",
+    "next_step": "Follow-up diagnostic mammogram and ultrasound in 6 months",
+    "findings_match_impression": true,
+    "mismatch_quote": null,
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "DATE: 10/08/2026",
+      "birads": "BI-RADS 3: Probably benign",
+      "next_step": "Continued follow-up with diagnostic mammogram and ultrasound of the left breast in 6 months",
+      "pathology_result": null
+    }
+  },
+  "P6-apr": {
+    "doc_type": "ultrasound",
+    "exam_date": "2026-04-15",
+    "side": "right",
+    "birads": "3",
+    "next_step": "Follow-up right breast ultrasound in 6 months",
+    "findings_match_impression": true,
+    "mismatch_quote": null,
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "DATE: 04/15/2026",
+      "birads": "BI-RADS 3: Probably benign",
+      "next_step": "Follow-up right breast ultrasound in 6 months",
+      "pathology_result": null
+    }
+  },
+  "P7-dx": {
+    "doc_type": "diagnostic",
+    "exam_date": "2026-09-14",
+    "side": "left",
+    "birads": "4B",
+    "next_step": "Ultrasound-guided core needle biopsy of left breast mass",
+    "findings_match_impression": true,
+    "mismatch_quote": null,
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "DATE: 09/14/2026",
+      "birads": "BI-RADS 4B: Moderate suspicion for malignancy.",
+      "next_step": "Ultrasound-guided core needle biopsy of the left breast mass.",
+      "pathology_result": null
+    }
+  },
+  "P7-path": {
+    "doc_type": "pathology",
+    "exam_date": "2026-09-21",
+    "side": "left",
+    "birads": null,
+    "next_step": null,
+    "findings_match_impression": null,
+    "mismatch_quote": null,
+    "pathology_result": "benign",
+    "diagnosis": "Fibroadenoma, negative for atypia and malignancy",
+    "quotes": {
+      "exam_date": "PROCEDURE DATE: 09/21/2026",
+      "birads": null,
+      "next_step": null,
+      "pathology_result": "Fibroadenoma. Negative for atypia and malignancy."
+    }
+  },
+  "P8-dx": {
+    "doc_type": "diagnostic",
+    "exam_date": "2026-09-16",
+    "side": "right",
+    "birads": "5",
+    "next_step": "Ultrasound-guided core needle biopsy of right breast mass",
+    "findings_match_impression": true,
+    "mismatch_quote": null,
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "DATE: 09/16/2026",
+      "birads": "BI-RADS 5: Highly suggestive of malignancy.",
+      "next_step": "Ultrasound-guided core needle biopsy of the right breast mass.",
+      "pathology_result": null
+    }
+  },
+  "P8-path": {
+    "doc_type": "pathology",
+    "exam_date": "2026-09-21",
+    "side": "right",
+    "birads": null,
+    "next_step": null,
+    "findings_match_impression": null,
+    "mismatch_quote": null,
+    "pathology_result": "malignant",
+    "diagnosis": "Invasive ductal carcinoma, grade 2, ER+/PR+/HER2-",
+    "quotes": {
+      "exam_date": "PROCEDURE DATE: 09/21/2026",
+      "birads": null,
+      "next_step": null,
+      "pathology_result": "Invasive ductal carcinoma, Nottingham grade 2."
+    }
+  },
+  "P9-screen": {
+    "doc_type": "screening",
+    "exam_date": "2026-09-22",
+    "side": "both",
+    "birads": "1",
+    "next_step": "Routine screening mammogram in 1 year",
+    "findings_match_impression": false,
+    "mismatch_quote": "there is a possible new 1.1 cm irregular mass with indistinct margins",
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "DATE: 09/22/2026",
+      "birads": "BI-RADS 1: Negative",
+      "next_step": "Routine screening mammogram in 1 year",
+      "pathology_result": null
+    }
+  },
+  "P9-addendum": {
+    "doc_type": "addendum",
+    "exam_date": "2026-09-22",
+    "side": "left",
+    "birads": "0",
+    "next_step": "Diagnostic mammogram and targeted ultrasound of left breast",
+    "findings_match_impression": true,
+    "mismatch_quote": null,
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "ADDENDUM to the screening mammogram of 09/22/2026",
+      "birads": "CORRECTED IMPRESSION: BI-RADS 0: Incomplete.",
+      "next_step": "Diagnostic mammogram and targeted ultrasound of the left breast.",
+      "pathology_result": null
+    }
+  },
+  "P9-dx": {
+    "doc_type": "diagnostic",
+    "exam_date": "2026-09-29",
+    "side": "left",
+    "birads": "1",
+    "next_step": "Return to annual screening",
+    "findings_match_impression": true,
+    "mismatch_quote": null,
+    "pathology_result": null,
+    "diagnosis": null,
+    "quotes": {
+      "exam_date": "DATE: 09/29/2026",
+      "birads": "BI-RADS 1: Negative.",
+      "next_step": "Return to annual screening.",
+      "pathology_result": null
+    }
+  }
+}

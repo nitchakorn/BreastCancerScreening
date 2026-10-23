@@ -1,0 +1,67 @@
+[
+  {
+    "id": "P1", "name": "Ana R.", "first": "Ana", "age": 52, "path": "BI-RADS 1. Routine, so the agent stays quiet.",
+    "first_doc": "P1-screen", "arrives": "2026-09-02",
+    "reactions": []
+  },
+  {
+    "id": "P2", "name": "Grace T.", "first": "Grace", "age": 47, "path": "BI-RADS 0. Books from the first text.",
+    "first_doc": "P2-screen", "arrives": "2026-09-01",
+    "reactions": [
+      { "when": "outreach", "doc": "P2-screen", "after": 1, "reply": "P2-r1", "book": { "appt": "2026-09-10", "kind": "imaging", "result": "P2-dx" } }
+    ]
+  },
+  {
+    "id": "P3", "name": "Marisol V.", "first": "Marisol", "age": 61, "path": "BI-RADS 0. Needs a ride.",
+    "first_doc": "P3-screen", "arrives": "2026-09-03",
+    "reactions": [
+      { "when": "outreach", "doc": "P3-screen", "after": 1, "reply": "P3-r1" },
+      { "when": "transport", "after": 0, "reply": "P3-r2", "book": { "appt": "2026-09-08", "kind": "imaging", "result": "P3-dx" } }
+    ]
+  },
+  {
+    "id": "P4", "name": "Denise W.", "first": "Denise", "age": 55, "path": "BI-RADS 0. No answer, so a navigator takes over.",
+    "first_doc": "P4-screen", "arrives": "2026-09-14",
+    "reactions": [
+      { "when": "handoff", "after": 3, "person": "Nurse navigator", "note": "Reached her by phone. Her number had changed, and the new one is now on file. She booked her diagnostic mammogram.", "book": { "appt": "2026-09-25", "kind": "imaging", "result": "P4-dx" } }
+    ]
+  },
+  {
+    "id": "P5", "name": "Linda K.", "first": "Linda", "age": 58, "path": "BI-RADS 3. On time.",
+    "first_doc": "P5-apr", "arrives": "2026-09-01", "source": "Already on the six-month follow-up list",
+    "reactions": [
+      { "when": "outreach", "doc": "P5-apr", "after": 0, "reply": "P5-r1", "book": { "appt": "2026-10-08", "kind": "imaging", "result": "P5-6mo" } }
+    ]
+  },
+  {
+    "id": "P6", "name": "Tamika J.", "first": "Tamika", "age": 49, "path": "BI-RADS 3. Missed, so a navigator takes over.",
+    "first_doc": "P6-apr", "arrives": "2026-09-01", "source": "Already on the six-month follow-up list",
+    "reactions": [
+      { "when": "handoff", "after": 1, "person": "Nurse navigator", "note": "Called and left a voicemail. Mailed a letter to her home address." }
+    ]
+  },
+  {
+    "id": "P7", "name": "Priya S.", "first": "Priya", "age": 44, "path": "BI-RADS 4. Scared, so a navigator calls her.",
+    "first_doc": "P7-dx", "arrives": "2026-09-14",
+    "reactions": [
+      { "when": "outreach", "doc": "P7-dx", "after": 0, "reply": "P7-r1" },
+      { "when": "handoff", "after": 1, "person": "Nurse navigator", "note": "Called her and talked through what a core biopsy involves. She asked to bring her sister. She booked the biopsy.", "book": { "appt": "2026-09-21", "kind": "biopsy", "result": "P7-path", "resultAfter": 3 } },
+      { "when": "concordance", "after": 1, "person": "Radiologist", "note": "The benign fibroadenoma matches the imaging. Concordant. Back to annual screening." }
+    ]
+  },
+  {
+    "id": "P8", "name": "Helen M.", "first": "Helen", "age": 67, "path": "BI-RADS 5. Cancer, handed to breast surgery.",
+    "first_doc": "P8-dx", "arrives": "2026-09-16",
+    "reactions": [
+      { "when": "outreach", "doc": "P8-dx", "after": 0, "reply": "P8-r1", "book": { "appt": "2026-09-21", "kind": "biopsy", "result": "P8-path", "resultAfter": 3 } }
+    ]
+  },
+  {
+    "id": "P9", "name": "Rosa D.", "first": "Rosa", "age": 63, "path": "Unclear report. Held for a radiologist.",
+    "first_doc": "P9-screen", "arrives": "2026-09-22",
+    "reactions": [
+      { "when": "hold", "after": 1, "person": "Radiologist", "note": "Reviewed the report. The impression was entered in error. Issued an addendum.", "doc": "P9-addendum" },
+      { "when": "outreach", "doc": "P9-addendum", "after": 0, "reply": "P9-r1", "book": { "appt": "2026-09-29", "kind": "imaging", "result": "P9-dx" } }
+    ]
+  }
+]
