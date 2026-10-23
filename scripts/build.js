@@ -48,7 +48,11 @@ console.log("wrote docs/index.html (" + page.length + " bytes)");
 const i = process.argv.indexOf("--artifact");
 if (i > 0 && process.argv[i + 1]) {
   // The artifact copy lives outside GitHub Pages, so it links to the workspace page there.
-  fs.writeFileSync(process.argv[i + 1], head + "\n" + body.replace('href="workspace.html"', 'href="https://nitchakorn.github.io/BreastCancerScreening/workspace.html" target="_blank" rel="noopener"') + "\n");
+  // Artifact pages can't download files, so the SVG download link is left out.
+  const artifactBody = body
+    .replace('href="workspace.html"', 'href="https://nitchakorn.github.io/BreastCancerScreening/workspace.html" target="_blank" rel="noopener"')
+    .replace(/\s*<a class="btn" id="workflow-download"[^>]*>Download SVG<\/a>/, "");
+  fs.writeFileSync(process.argv[i + 1], head + "\n" + artifactBody + "\n");
   console.log("wrote " + process.argv[i + 1]);
 }
 

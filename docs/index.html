@@ -1162,7 +1162,7 @@ Reply with only a JSON object in this shape, no other text:
   var workflowImage = $("workflow-image"), workflowZoom = 1, workflowScrollY = 0;
   // The flowchart is embedded once, in the preview. The viewer and the download reuse it.
   workflowImage.src = $("workflow-preview").src;
-  $("workflow-download").href = $("workflow-preview").src;
+  if ($("workflow-download")) $("workflow-download").href = $("workflow-preview").src;
   function zoomWorkflow(value) {
     workflowZoom = Math.max(0.5, Math.min(3, value));
     workflowImage.style.width = (workflowViewport.clientWidth * workflowZoom) + "px";
