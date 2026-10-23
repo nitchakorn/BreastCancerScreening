@@ -8,6 +8,55 @@ Claude reads each breast imaging report, pathology report and patient text reply
 
 This is a demo with synthetic patients. It sends no real messages, books nothing and writes to no EHR. Not for clinical use.
 
+## Local agent workspace
+
+The local workspace adds report intake, a background reader, SQLite case storage, rule validation, a human review queue, an action history and an in-app test inbox. The original nine-patient simulation and workflow flowchart remain available from the workspace header.
+
+You need **Node.js 24.5 or newer**. All server and test code uses Node's built-in modules; there are no npm dependencies to install.
+
+```sh
+npm start
+```
+
+Open the local address printed by the server, normally `http://127.0.0.1:3000`. Start with **Try a sample**, then choose **Read report & start case**. You can also save a sample as a `.txt` file and upload it. The server binds to loopback; this milestone is a local synthetic-data workspace without authentication.
+
+### Recorded mode: no key required
+
+With no API key configured, the workspace uses **recorded mode**, clearly identified in the banner and each case's action history. It recognizes the eight bundled synthetic reports, with their exam/procedure date adjusted to today. It does not read arbitrary new reports or call a model. Altered or unknown reports fail explicitly; they never silently use a different sample's answer.
+
+Try **Diagnostic imaging** to create a case due in 14 days and a test-inbox message. **Routine screening** closes without outreach. **Conflicting findings** creates a review task without sending a patient message. **BI-RADS 5** adds a navigator heads-up while outreach continues. Pathology always goes to human review in this milestone. Six-month cases wait until one month before their due date for the initial message.
+
+Cases, messages, review tasks and events are stored in `.local/cases.sqlite`, which is excluded from Git. Duplicate submissions with the same patient label and report reuse the case. The initial local message is committed atomically with the case decision and has a unique delivery key. Restarting resumes interrupted reads without duplicating that message. An interrupted live model call may be repeated; local delivery deduplication does not imply model-call billing is exactly once.
+
+Sample dates and deadline checks use `APP_TIME_ZONE` (default `America/New_York`). Event timestamps are stored in UTC and displayed in the browser's local time.
+
+### Enable live Claude reading later
+
+Keep credentials in environment settings or a local `.env` file, never in Git or chat. To use a local file, copy `.env.example` to `.env`, set `READER_MODE=live` and set `ANTHROPIC_API_KEY` securely. Restart the server afterward. You can leave `ANTHROPIC_MODEL` blank to discover an available Sonnet model from your API account, or choose an available model ID explicitly. To force recorded mode even when a key is present, set `READER_MODE=recorded`.
+
+Live mode calls `api.anthropic.com` using the existing report prompt and a structured `record_report` tool. Code checks the supporting quotes, category and date before selecting an action. A failed API request retains the case with a **Retry report read** action. An unusable structured answer enters human review. The API key stays on the server. In the managed cloud environment, the start command preserves the configured proxy and CA verification.
+
+This first milestone stops at **report → read → saved pathway → initial test message or review**. Reply processing, confirmed bookings, repeat outreach and external messaging integrations are future work. Recorded-mode readiness does not establish that live API access works.
+
+### Validate and demonstrate
+
+```sh
+npm test            # HTTP workflow, SQLite persistence, duplicates, policy failures and mocked provider errors
+npm run check       # original nine-patient simulation
+npm run build       # original standalone dashboard and embedded workflow
+```
+
+For a short demonstration: submit the diagnostic sample, inspect its evidence and inbox, submit it again to show deduplication, restart the server to show persistence, then submit the conflicting sample to show human review. The automated provider tests use test doubles and do not call Anthropic. A live demonstration requires enabling and checking live mode separately.
+
+| Path | Purpose |
+| --- | --- |
+| `server/reader.js` | Explicit recorded mode and live Anthropic adapter |
+| `server/policy.js` | Validation and initial action selection using the existing pathway rules |
+| `server/store.js` | SQLite records, atomic inbox delivery, recovery and event history |
+| `server/app.js` | HTTP API and background case worker |
+| `app/` | Local workspace interface |
+| `test/` | Tests with no model charges |
+
 ## How it works
 
 1. **A new report arrives.** This starts the agent.
@@ -61,6 +110,10 @@ node scripts/build.js        # rebuild docs/index.html
 ```
 
 Then open `docs/index.html` in a browser.
+
+The **Workflow** section contains the full flowchart. Choose **Expand flowchart** to zoom and scroll, or **Download SVG** to keep a vector copy. Close the viewer with **Close** or Escape. The diagram is embedded in the built HTML, so it also works when that file is opened directly.
+
+The diagram source is `site/workflow.dot`, with its rendered image in `site/workflow.svg`. If you edit the diagram, regenerate it with Graphviz (`dot -Tsvg site/workflow.dot -o site/workflow.svg`), then run `node scripts/build.js` to update the page.
 
 To run the reading step again, you also need [Claude Code](https://claude.com/claude-code) installed and signed in:
 

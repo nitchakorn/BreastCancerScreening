@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A local agent workspace for synthetic reports, recorded or live Claude reads, saved cases and a test inbox.">
+  <title>Agent workspace · Breast screening follow-up</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header class="page-header">
+      <div><p class="eyebrow">Breast screening follow-up · Synthetic data only</p><h1>Agent workspace</h1><p class="lede">A new report becomes a checked read, a saved case and a next step.</p></div>
+      <a class="button secondary" href="/simulation#workflow">View simulation &amp; workflow</a>
+    </header>
+    <div class="milestone" aria-label="Current milestone"><span>01 Upload report</span><span>02 Read &amp; validate</span><span>03 Save pathway</span><span>04 Test inbox</span></div>
+    <div id="connection" class="notice" role="status">Checking the local agent…</div>
+    <div class="workspace">
+      <section class="card intake" aria-labelledby="intake-title">
+        <p class="eyebrow">Start a case</p><h2 id="intake-title">Give the agent a report</h2>
+        <p class="muted">Use a synthetic report. Messages stay in this app’s test inbox.</p>
+        <form id="intake-form">
+          <label for="patient">Synthetic patient label</label>
+          <input id="patient" name="patient" maxlength="100" value="Demo patient" required>
+          <div class="field-heading"><label for="example">Try a sample</label><span class="muted">Exam date uses today</span></div>
+          <select id="example"><option value="">Choose a synthetic report…</option></select>
+          <label for="report-file">Or upload a text report</label>
+          <input id="report-file" type="file" accept=".txt,text/plain">
+          <label for="report">Report text</label>
+          <textarea id="report" name="report" rows="13" minlength="30" maxlength="20000" placeholder="Paste a synthetic imaging or pathology report…" required></textarea>
+          <button type="submit" id="submit">Read report &amp; start case</button>
+          <p class="muted small" id="reader-note">Recorded mode uses the bundled samples without an API call. Live mode uses your Claude API account. Cases are saved before reading.</p>
+          <p id="form-status" role="status"></p>
+          <p id="form-error" class="error" role="alert" hidden></p>
+        </form>
+      </section>
+      <div class="case-column">
+        <section class="card" aria-labelledby="cases-title">
+          <div class="section-heading"><div><p class="eyebrow">Persistent case records</p><h2 id="cases-title">Your cases</h2></div><button class="secondary compact" id="refresh" type="button">Refresh</button></div>
+          <div id="cases" class="case-list"><p class="empty">No cases yet. Start with a sample report.</p></div>
+        </section>
+        <section class="card" aria-labelledby="detail-title">
+          <div class="section-heading"><h2 id="detail-title">Case activity</h2><span id="case-state" class="badge" hidden></span></div>
+          <div id="detail"><p class="empty">Choose a case to see the model’s evidence, the rule decision and the test message.</p></div>
+        </section>
+      </div>
+    </div>
+    <footer><p>Milestone 1: report intake, recorded or live extraction, validation, persistent cases and initial test messages. Patient replies, booking confirmation and the full reminder sequence are the next milestone.</p><p>Not for clinical use. No real patient messages, bookings or EHR writes. This local workspace has no user authentication.</p></footer>
+  </main>
+</body>
+</html>

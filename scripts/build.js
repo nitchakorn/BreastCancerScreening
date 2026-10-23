@@ -32,6 +32,7 @@ const between = (a, b) => t.slice(t.indexOf(a) + a.length, t.indexOf(b));
 const fill = (s) => s
   .replace("{{PROMPT_DOC}}", escHtml(data.prompts.document.trim()))
   .replace("{{PROMPT_REPLY}}", escHtml(data.prompts.reply.trim()))
+  .replace(/\{\{WORKFLOW\}\}/g, "data:image/svg+xml;base64," + Buffer.from(read("site/workflow.svg")).toString("base64"))
   .replace("{{DATA}}", JSON.stringify(data).replace(/<\//g, "<\\/"))
   .replace("{{AGENT}}", agent);
 const head = fill(between("<!-- HEAD -->", "<!-- /HEAD -->")).trim();
