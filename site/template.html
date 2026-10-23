@@ -314,11 +314,11 @@ details.more .tpl div { display: grid; gap: 2px; }
       <p>Follow a report through the checks, scheduling, patient replies and results. Blue shows Claude reading, teal shows code actions, amber marks human handoffs, and green marks closure.</p>
     </div>
     <figure class="workflow-card" style="margin:0">
-      <img class="workflow-preview" src="{{WORKFLOW}}" alt="Full breast screening workflow: report validation and BI-RADS pathways, scheduling and outreach with navigator escalation, and pathology review through case closure. Detailed steps and deadlines follow in How it works.">
+      <img class="workflow-preview" id="workflow-preview" src="{{WORKFLOW}}" alt="Full breast screening workflow: report validation and BI-RADS pathways, scheduling and outreach with navigator escalation, and pathology review through case closure. Detailed steps and deadlines follow in How it works.">
       <figcaption>Preview of the report stage. Expand the flowchart to zoom and scroll through all three stages.</figcaption>
       <div class="btns">
         <button class="btn primary" id="workflow-open" type="button" aria-haspopup="dialog">Expand flowchart</button>
-        <a class="btn" href="{{WORKFLOW}}" download="breast-screening-workflow.svg">Download SVG</a>
+        <a class="btn" id="workflow-download" href="#workflow" download="breast-screening-workflow.svg">Download SVG</a>
         <a href="#how-h">Read the workflow steps and deadlines</a>
       </div>
     </figure>
@@ -332,7 +332,7 @@ details.more .tpl div { display: grid; gap: 2px; }
         <button class="btn" id="workflow-close" type="button" autofocus>Close</button>
       </div>
       <div class="workflow-viewport" id="workflow-viewport" tabindex="0" role="region" aria-label="Scrollable workflow diagram">
-        <img id="workflow-image" src="{{WORKFLOW}}" alt="Full workflow diagram. Use the zoom controls and scroll to explore report review, outreach and pathology resolution.">
+        <img id="workflow-image" alt="Full workflow diagram. Use the zoom controls and scroll to explore report review, outreach and pathology resolution.">
       </div>
     </dialog>
   </section>
@@ -644,6 +644,9 @@ details.more .tpl div { display: grid; gap: 2px; }
   /* ---------- workflow viewer ---------- */
   var workflowDialog = $("workflow-dialog"), workflowViewport = $("workflow-viewport");
   var workflowImage = $("workflow-image"), workflowZoom = 1, workflowScrollY = 0;
+  // The flowchart is embedded once, in the preview. The viewer and the download reuse it.
+  workflowImage.src = $("workflow-preview").src;
+  $("workflow-download").href = $("workflow-preview").src;
   function zoomWorkflow(value) {
     workflowZoom = Math.max(0.5, Math.min(3, value));
     workflowImage.style.width = (workflowViewport.clientWidth * workflowZoom) + "px";
