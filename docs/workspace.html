@@ -500,6 +500,7 @@ window.WorkspaceModules = (function () {
           return;
         }
         var due = addMonths(exam, RULES.shortInterval.dueMonths);
+        c.booked = null;
         c.step = {
           kind: "shortInterval", name: RULES.shortInterval.step, due: due,
           outreachStart: addMonths(due, -RULES.shortInterval.outreachMonthsBefore),
@@ -1219,6 +1220,7 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
     },
     create(patient, text, requestKey, now) { return this.createCase(patient, text, requestKey, now); },
     pending() { return db.prepare("SELECT COUNT(*) AS n FROM inputs WHERE status IN ('queued','reading')").get().n; },
+    lastEvent() { return db.prepare('SELECT COALESCE(MAX(seq),0) AS n FROM events').get().n; },
     addInput(caseId, type, text, requestKey, now) {
       return transaction(() => {
         const row = db.prepare('SELECT id,status,state_json FROM cases WHERE id=?').get(caseId);
@@ -2166,7 +2168,10 @@ window.SQLJS_BASE = "https://cdn.jsdelivr.net/npm/sql.js@1.14.2/dist/";
       return new Response(JSON.stringify(result.body), { status: result.status, headers: { 'content-type': 'application/json' } });
     };
     // The background reader, as on the server. Recorded reads take a moment, like a real read.
-    setInterval(function () { api.runOnce().then(saveSoon).catch(function () {}); }, 700);
+    var savedAt = store.lastEvent();
+    setInterval(function () {
+      api.runOnce().then(function () { var last = store.lastEvent(); if (last !== savedAt) { savedAt = last; saveSoon(); } }).catch(function () {});
+    }, 700);
     window.startWorkspaceApp();
   }
 

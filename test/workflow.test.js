@@ -212,3 +212,10 @@ test('HTTP validation rejects invalid bodies, cross-origin writes, oversized rep
   assert.equal(data.length,8);
   assert(data.every(item=>item.text.includes('DATE: 10/23/2026')));
 });
+
+test('the simulation page links to the workspace, and the local server serves it',async t=>{
+  const {base}=await fixture(t);
+  const page=await (await fetch(base+'/workspace.html')).text();
+  assert.match(page,/Agent workspace/);
+  assert.match(await (await fetch(base+'/simulation')).text(),/href="workspace.html"/);
+});

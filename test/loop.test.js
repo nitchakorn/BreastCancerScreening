@@ -300,3 +300,16 @@ test('every reply rule is covered by a recorded sample: slots, and a person for 
     }
   }
 });
+
+test('a new report that changes the plan drops an old booking instead of reminding her about it', async t => {
+  const w = await workspace(t);
+  const id = await w.start('Grace T.', 'P2-screen');
+  await w.book(id, 5);
+  let item = await w.next(id, 'P5-6mo');
+  assert.equal(item.status, 'waiting_reminder');
+  assert.equal(item.agent.booked, null);
+  await w.forward(6);
+  item = await w.get(id);
+  assert(!item.messages.some(m => /^Reminder: your appointment/.test(m.body)));
+  assert(!item.events.some(e => e.kind === 'appt'));
+});

@@ -164,6 +164,7 @@ function openStore(filename, { Database = DatabaseSync } = {}) {
     },
     create(patient, text, requestKey, now) { return this.createCase(patient, text, requestKey, now); },
     pending() { return db.prepare("SELECT COUNT(*) AS n FROM inputs WHERE status IN ('queued','reading')").get().n; },
+    lastEvent() { return db.prepare('SELECT COALESCE(MAX(seq),0) AS n FROM events').get().n; },
     addInput(caseId, type, text, requestKey, now) {
       return transaction(() => {
         const row = db.prepare('SELECT id,status,state_json FROM cases WHERE id=?').get(caseId);

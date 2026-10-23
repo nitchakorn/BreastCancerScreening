@@ -8,6 +8,7 @@ const { createApi } = require('./api.js');
 const root = path.join(__dirname, '..');
 const staticFiles = new Map([
   ['/', ['app/index.html', 'text/html; charset=utf-8']],
+  ['/workspace.html', ['app/index.html', 'text/html; charset=utf-8']],
   ['/app.css', ['app/app.css', 'text/css; charset=utf-8']],
   ['/app.js', ['app/app.js', 'text/javascript; charset=utf-8']],
   ['/simulation', ['docs/index.html', 'text/html; charset=utf-8']]

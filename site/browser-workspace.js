@@ -137,7 +137,10 @@
       return new Response(JSON.stringify(result.body), { status: result.status, headers: { 'content-type': 'application/json' } });
     };
     // The background reader, as on the server. Recorded reads take a moment, like a real read.
-    setInterval(function () { api.runOnce().then(saveSoon).catch(function () {}); }, 700);
+    var savedAt = store.lastEvent();
+    setInterval(function () {
+      api.runOnce().then(function () { var last = store.lastEvent(); if (last !== savedAt) { savedAt = last; saveSoon(); } }).catch(function () {});
+    }, 700);
     window.startWorkspaceApp();
   }
 

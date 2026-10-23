@@ -718,6 +718,7 @@ Reply with only a JSON object in this shape, no other text:
           return;
         }
         var due = addMonths(exam, RULES.shortInterval.dueMonths);
+        c.booked = null;
         c.step = {
           kind: "shortInterval", name: RULES.shortInterval.step, due: due,
           outreachStart: addMonths(due, -RULES.shortInterval.outreachMonthsBefore),

@@ -247,6 +247,7 @@
           return;
         }
         var due = addMonths(exam, RULES.shortInterval.dueMonths);
+        c.booked = null;
         c.step = {
           kind: "shortInterval", name: RULES.shortInterval.step, due: due,
           outreachStart: addMonths(due, -RULES.shortInterval.outreachMonthsBefore),
