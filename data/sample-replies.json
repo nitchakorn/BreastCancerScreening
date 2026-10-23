@@ -1,0 +1,9 @@
+[
+  { "id": "S-time", "label": "Wants another day", "text": "Can I come on a different day? Next week is bad for me." },
+  { "id": "S-work", "label": "Can't come because of work", "text": "Thursday doesn't work, I start work at 7. Is there anything on a Saturday or after 5?" },
+  { "id": "S-question", "label": "Asks a medical question", "text": "Will the biopsy hurt? And how long until they know what it is?" },
+  { "id": "S-decline", "label": "Turns down the test", "text": "I've thought about it and I don't want the biopsy. Please take me off this list." },
+  { "id": "S-wrong", "label": "Wrong number", "text": "Sorry, wrong number. I don't know who that is." },
+  { "id": "S-childcare", "label": "No one to watch her kids", "text": "I can't come in during the day, there's nobody to watch my kids." },
+  { "id": "S-unclear", "label": "Unclear reply", "text": "ok" }
+]

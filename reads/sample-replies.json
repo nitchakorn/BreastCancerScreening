@@ -1,0 +1,53 @@
+{
+  "S-time": {
+    "labels": [
+      "wants_new_time"
+    ],
+    "quote": "Can I come on a different day? Next week is bad for me.",
+    "summary": "She is asking to come on a different day because next week doesn't work for her."
+  },
+  "S-work": {
+    "labels": [
+      "wants_new_time",
+      "other_barrier"
+    ],
+    "quote": "Thursday doesn't work, I start work at 7. Is there anything on a Saturday or after 5?",
+    "summary": "She can't make Thursday because of her work schedule and asks for a Saturday or after-5pm appointment."
+  },
+  "S-question": {
+    "labels": [
+      "medical_question"
+    ],
+    "quote": "Will the biopsy hurt? And how long until they know what it is?",
+    "summary": "She is asking whether the biopsy will be painful and how long the results will take."
+  },
+  "S-decline": {
+    "labels": [
+      "declines_care"
+    ],
+    "quote": "I don't want the biopsy. Please take me off this list.",
+    "summary": "She has decided against the biopsy and asks to be removed from the messaging list."
+  },
+  "S-wrong": {
+    "labels": [
+      "wrong_number"
+    ],
+    "quote": "wrong number. I don't know who that is.",
+    "summary": "The message reached the wrong person, who does not know who is texting."
+  },
+  "S-childcare": {
+    "labels": [
+      "other_barrier",
+      "wants_new_time"
+    ],
+    "quote": "I can't come in during the day, there's nobody to watch my kids.",
+    "summary": "She can't attend daytime appointments because she has no childcare, so she likely needs a different time."
+  },
+  "S-unclear": {
+    "labels": [
+      "other"
+    ],
+    "quote": "ok",
+    "summary": "She replied only 'ok', which doesn't say whether she booked or what she plans to do."
+  }
+}

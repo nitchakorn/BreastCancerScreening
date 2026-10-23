@@ -282,3 +282,21 @@ test('the demo clock moves forward only, and start over clears everything', asyn
   assert.equal(reset.body.clock.today, START);
   assert.equal((await w.call('GET', '/api/cases')).body.cases.length, 0);
 });
+
+test('every reply rule is covered by a recorded sample: slots, and a person for questions, refusals, wrong numbers and barriers', async t => {
+  const w = await workspace(t);
+  const expected = { 'S-time': 'slots', 'S-question': 'medical question', 'S-decline': 'turned down care', 'S-wrong': 'wrong person',
+    'S-childcare': "barrier the agent can't solve", 'S-work': "barrier the agent can't solve", 'S-unclear': "couldn't sort" };
+  for (const [id, outcome] of Object.entries(expected)) {
+    const c = await w.start(`Case ${id}`, 'P7-dx');
+    const item = await w.reply(c, reply(id));
+    assert.equal(item.replies[0].status, 'read', id);
+    if (outcome === 'slots') {
+      assert.equal(item.status, 'awaiting_booking');
+      assert.match(item.messages.at(-1).body, /other open times/);
+    } else {
+      assert.equal(item.status, 'needs_review', id);
+      assert(item.reviews.find(r => r.status === 'open').reason.includes(outcome), `${id}: ${item.reviews.at(-1).reason}`);
+    }
+  }
+});

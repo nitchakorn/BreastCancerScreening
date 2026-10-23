@@ -1,8 +1,9 @@
 const A = require('../agent/agent.js');
 const documents = require('../data/documents.json');
 const reads = require('../reads/documents.json');
-const replies = require('../data/replies.json');
-const replyReads = require('../reads/replies.json');
+// Replies from the simulation, plus extra workspace samples that cover every reply rule.
+const replies = [...require('../data/replies.json'), ...require('../data/sample-replies.json')];
+const replyReads = { ...require('../reads/replies.json'), ...require('../reads/sample-replies.json') };
 const patients = require('../data/patients.json');
 
 // Reports that start a case. The exam date moves to today.
@@ -17,8 +18,10 @@ const NEXT = [
   ['P5-6mo', 'Six-month result: stable (BI-RADS 3)'], ['P7-path', 'Pathology: benign fibroadenoma'], ['P8-path', 'Pathology: invasive cancer']
 ];
 const REPLIES = [
-  ['P2-r1', 'Says she booked'], ['P3-r1', 'Has no ride'], ['P3-r2', 'Ride works, booked'], ['P5-r1', 'Booked from the reminder'],
-  ['P7-r1', 'Scared, asks for a call'], ['P8-r1', 'Booked Monday morning'], ['P9-r1', 'Scheduled for the 29th']
+  ['P3-r1', 'Has no ride'], ['P2-r1', 'Says she booked'], ['P7-r1', 'Scared, asks for a call'], ['S-time', 'Wants another day'],
+  ['S-question', 'Asks a medical question'], ['S-decline', 'Turns down the test'], ['S-wrong', 'Wrong number'],
+  ['S-childcare', 'No one to watch her kids'], ['S-work', 'Can’t come because of work'], ['S-unclear', 'Just says “ok”'],
+  ['P3-r2', 'Ride works, booked'], ['P8-r1', 'Booked Monday morning']
 ];
 
 const US = /\b(\d{2})\/(\d{2})\/(\d{4})\b/g;

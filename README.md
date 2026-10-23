@@ -147,6 +147,7 @@ To run the reading step again, you also need [Claude Code](https://claude.com/cl
 
 ```
 node scripts/read.js         # sends every report and reply to Claude, saves to reads/
+node scripts/read.js --samples   # reads the extra workspace replies only
 ```
 
 No API key is stored in this repo. The page replays the recorded reads in `reads/`, so it works without one.
@@ -157,6 +158,7 @@ No API key is stored in this repo. The page replays the recorded reads in `reads
 | --- | --- |
 | `data/documents.json` | The reports, the addendum and the pathology reports, all made up |
 | `data/replies.json` | Patients' text replies |
+| `data/sample-replies.json` | Extra replies for the workspace, so every reply rule has a sample |
 | `data/patients.json` | The patients, and how the simulated world reacts to the agent |
 | `prompts/` | The two prompts Claude gets: one for documents, one for replies |
 | `reads/` | What Claude returned in the recorded run |
