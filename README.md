@@ -112,6 +112,8 @@ npm run build       # rebuild docs/index.html
 | `test/workflow.test.js` | Intake, duplicates, restarts, retries and request checks |
 | `test/policy.test.js` | The rules read every report the same way Claude did in the first version. A report the rules can't read, or a bad read, is held for a person instead of messaging her. A comparison with an inexact quote isn't used |
 | `test/reader.test.js` | Rules read reports in every mode with no model call. Recorded, live and Claude Code comparisons and replies, with the API mocked |
+| `test/eval.test.js` | The rules read the evaluation corpus with no wrong reads and no missed holds; the scorer's own logic; the saved model run re-scores clean |
+| `test/variants.test.js` | The category and date variants the eval found stay readable, the reader and the checker share one pattern, and a two-digit year still holds |
 
 ### Evaluation: how well does it read, and is it ever unsafe
 
@@ -131,17 +133,17 @@ npm run eval:model    # also replies and comparisons through your Claude Code si
 node eval/run.js --score eval/results/<file>.json   # re-score a saved run
 ```
 
-Each run saves the raw model answers in `eval/results/` and writes `eval/REPORT.md`. The latest saved run (Oct 25, 2026, 56 calls through Claude Code):
+Each run saves the raw model answers in `eval/results/` and writes `eval/REPORT.md`. The saved run (Oct 25, 2026, 56 calls through Claude Code):
 
 | | Result |
 | --- | --- |
-| Rules | 35 of 38 readable reports read correctly, 3 over-holds (`BIRADS` without a hyphen, `BI-RADS®` with the mark, a `9/8/2026` date), 16 of 16 holds, **0 unsafe** |
+| Rules | 40 of 40 readable reports read correctly, 17 of 17 holds, **0 unsafe** |
 | Replies | 95.5% exact label sets, 100% right action, 100% quotes found, **0 missed escalations** |
 | Comparisons | 11 of 12 match calls, 100% mismatch recall, 100% quotes found, 1 over-flag, **0 missed mismatches** |
 
 `test/eval.test.js` runs the rules part on every `npm test` and fails the build if a wrong read or a missed hold appears. It also re-scores the saved run.
 
-The three over-holds are the eval doing its job: the rules in `agent/agent.js` need `BI-RADS` with a hyphen and a two-digit date, while the checker in `server/policy.js` accepts `BIRADS`. A health system's own report formats would set which variants to add.
+**What the eval changed.** The first run read 35 of 38 readable reports and held three that a radiologist would have read at a glance: `BIRADS 4B` without a hyphen, `ACR BI-RADS® Category 3` with the mark, and a `9/8/2026` date without leading zeros. Safe, but each one is a radiologist's time. The reader in `agent/agent.js` wanted the hyphen and two-digit dates, while the checker in `server/policy.js` already accepted `BIRADS`, so the two had drifted apart. The fix: one shared category pattern (`CATEGORY_PATTERN`) that both the reader and the checker use, dates with or without leading zeros, and three more corpus reports to hold the new edges (a two-digit year still holds; `BI RADS 3` and `BI-RADS category: 4A` read). `test/variants.test.js` keeps it that way. After the change: 40 of 40, 0 over-holds, still 0 unsafe. A real health system's report formats would add their own variants the same way: a corpus report first, then the rule.
 
 | Path | Purpose |
 | --- | --- |

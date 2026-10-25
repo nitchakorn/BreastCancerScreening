@@ -10,16 +10,16 @@
   },
   "reports": {
     "summary": {
-      "total": 54,
-      "readable": 38,
-      "should_hold": 16,
-      "correct_read": 35,
-      "over_hold": 3,
+      "total": 57,
+      "readable": 40,
+      "should_hold": 17,
+      "correct_read": 40,
+      "over_hold": 0,
       "wrong_read": 0,
-      "correct_hold": 16,
+      "correct_hold": 17,
       "missed_hold": 0,
       "unsafe": 0,
-      "coverage_pct": 92.1,
+      "coverage_pct": 100,
       "hold_recall_pct": 100
     },
     "byGroup": {
@@ -32,19 +32,19 @@
         "missed_hold": 0
       },
       "phrasing": {
-        "total": 8,
-        "correct_read": 4,
-        "over_hold": 2,
+        "total": 10,
+        "correct_read": 8,
+        "over_hold": 0,
         "wrong_read": 0,
         "correct_hold": 2,
         "missed_hold": 0
       },
       "date-format": {
-        "total": 5,
-        "correct_read": 0,
-        "over_hold": 1,
+        "total": 6,
+        "correct_read": 1,
+        "over_hold": 0,
         "wrong_read": 0,
-        "correct_hold": 4,
+        "correct_hold": 5,
         "missed_hold": 0
       },
       "bilateral": {
@@ -306,17 +306,15 @@
       {
         "id": "R13",
         "group": "phrasing",
-        "note": "No hyphen: 'BIRADS 4B'. The rules may not recognize it; a hold is acceptable, a wrong read is not",
-        "outcome": "over_hold",
-        "held": true,
-        "problems": [
-          "No BI-RADS category in the impression."
-        ],
+        "note": "No hyphen: 'BIRADS 4B'. Held by the rules until Oct 25, 2026, when the category pattern was widened after this eval",
+        "outcome": "correct_read",
+        "held": false,
+        "problems": [],
         "got": {
           "doc_type": "diagnostic",
-          "birads": null,
+          "birads": "4B",
           "side": "right",
-          "pathway": "review",
+          "pathway": "biopsy",
           "pathology_result": null,
           "breasts": []
         },
@@ -325,17 +323,15 @@
       {
         "id": "R14",
         "group": "phrasing",
-        "note": "Registered mark and 'Category': 'ACR BI-RADS® Category 3'",
-        "outcome": "over_hold",
-        "held": true,
-        "problems": [
-          "No BI-RADS category in the impression."
-        ],
+        "note": "Registered mark and 'Category': 'ACR BI-RADS® Category 3'. Held until Oct 25, 2026; now read",
+        "outcome": "correct_read",
+        "held": false,
+        "problems": [],
         "got": {
           "doc_type": "diagnostic",
-          "birads": null,
+          "birads": "3",
           "side": "right",
-          "pathway": "review",
+          "pathway": "shortInterval",
           "pathology_result": null,
           "breasts": []
         },
@@ -509,17 +505,15 @@
       {
         "id": "R24",
         "group": "date-format",
-        "note": "Single-digit month and day: 9/8/2026. The rules want two digits; a hold is acceptable",
-        "outcome": "over_hold",
-        "held": true,
-        "problems": [
-          "No valid exam date."
-        ],
+        "note": "Single-digit month and day: 9/8/2026. Held until Oct 25, 2026; now read. A two-digit year (R55) still holds",
+        "outcome": "correct_read",
+        "held": false,
+        "problems": [],
         "got": {
           "doc_type": "diagnostic",
           "birads": "4A",
           "side": "right",
-          "pathway": "review",
+          "pathway": "biopsy",
           "pathology_result": null,
           "breasts": []
         },
@@ -1075,6 +1069,59 @@
           "birads": "3",
           "side": "both",
           "pathway": "shortInterval",
+          "pathology_result": null,
+          "breasts": []
+        },
+        "mismatches": []
+      },
+      {
+        "id": "R55",
+        "group": "date-format",
+        "note": "Two-digit year 9/8/26. The widened date rule still needs four digits, so this must hold",
+        "outcome": "correct_hold",
+        "held": true,
+        "problems": [
+          "No valid exam date."
+        ],
+        "got": {
+          "doc_type": "diagnostic",
+          "birads": "4A",
+          "side": "right",
+          "pathway": "review",
+          "pathology_result": null,
+          "breasts": []
+        },
+        "mismatches": []
+      },
+      {
+        "id": "R56",
+        "group": "phrasing",
+        "note": "Space instead of a hyphen: 'BI RADS 3'",
+        "outcome": "correct_read",
+        "held": false,
+        "problems": [],
+        "got": {
+          "doc_type": "diagnostic",
+          "birads": "3",
+          "side": "left",
+          "pathway": "shortInterval",
+          "pathology_result": null,
+          "breasts": []
+        },
+        "mismatches": []
+      },
+      {
+        "id": "R57",
+        "group": "phrasing",
+        "note": "Colon after the word category: 'BI-RADS category: 4A'",
+        "outcome": "correct_read",
+        "held": false,
+        "problems": [],
+        "got": {
+          "doc_type": "diagnostic",
+          "birads": "4A",
+          "side": "right",
+          "pathway": "biopsy",
           "pathology_result": null,
           "breasts": []
         },

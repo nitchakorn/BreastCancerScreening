@@ -102,7 +102,11 @@
   */
   var LABEL = /^([A-Z][A-Z ]*[A-Z]):\s*(.*)$/;
   var GROWS = ["FINDINGS", "IMPRESSION", "CORRECTED IMPRESSION", "RECOMMENDATION", "DIAGNOSIS", "COMMENT", "INDICATION", "HISTORY"];
-  var CATEGORY = /BI-RADS\s*(?:category\s*)?:?\s*([0-6][ABC]?)\b/gi;
+  // How a report may write the category. The evaluation corpus (eval/) found reports written as "BIRADS 4B",
+  // "ACR BI-RADS® Category 3" and "BI RADS 3", all held for a radiologist until this pattern accepted them (Oct 25, 2026).
+  // server/policy.js checks every BI-RADS quote against this same pattern, so the reader and the checker agree.
+  var CATEGORY_PATTERN = "BI[\\s-]*RADS[®™]?\\s*(?:category\\s*)?[:\\-]?\\s*([0-6][ABC]?)\\b";
+  var CATEGORY = new RegExp(CATEGORY_PATTERN, "gi");
   var FINDING = /\b(mass(?:es)?|asymmetr(?:y|ies)|calcifications?|distortion|lesions?|nodules?)\b/gi;
   var NEGATED = /\b(no|not|without|negative for)\b/i;
 
@@ -126,10 +130,12 @@
     var right = /\bright\b/i.test(s || ""), left = /\bleft\b/i.test(s || "");
     return right !== left ? (right ? "right" : "left") : null;
   }
+  // A US date, month/day/year, with or without leading zeros ("09/08/2026" or "9/8/2026"). The year must have four digits.
   function isoFrom(s) {
-    var m = String(s || "").match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
+    var m = String(s || "").match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
     if (!m) return null;
-    var iso = m[3] + "-" + m[1] + "-" + m[2], d = new Date(iso + "T12:00:00Z");
+    var pad = function (x) { return x.length === 1 ? "0" + x : x; };
+    var iso = m[3] + "-" + pad(m[1]) + "-" + pad(m[2]), d = new Date(iso + "T12:00:00Z");
     return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso ? iso : null;
   }
   function categoriesIn(s) {
@@ -775,7 +781,7 @@
     return { events: events, snapshots: snapshots };
   }
 
-  var api = { RULES: RULES, EXCEPTIONS: EXCEPTIONS, TEMPLATES: TEMPLATES, simulate: simulate, createEngine: createEngine, newCase: newCase,
+  var api = { RULES: RULES, EXCEPTIONS: EXCEPTIONS, TEMPLATES: TEMPLATES, CATEGORY_PATTERN: CATEGORY_PATTERN, simulate: simulate, createEngine: createEngine, newCase: newCase,
     readReport: readReport, checkComparison: checkComparison, checkRead: checkRead, summarizeRead: summarizeRead, normBirads: normBirads, pathwayFor: pathwayFor, catOf: catOf,
     followSide: followSide, perBreast: perBreast, sideRead: sideRead,
     addDays: addDays, addMonths: addMonths, dayOf: dayOf, dateOf: dateOf, fmt: fmt, fmtShort: fmtShort, weekday: weekday, message: message };

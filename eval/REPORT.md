@@ -12,35 +12,27 @@ Three safety numbers must be zero. Everything else is cost or coverage.
 
 ## Reports: the rules
 
-54 synthetic reports. 38 are readable by the rules as written; 16 must be held for a radiologist.
+57 synthetic reports. 40 are readable by the rules as written; 17 must be held for a radiologist.
 
 | Measure | Value |
 | --- | --- |
-| Correct reads | 35 of 38 (92.1%) |
-| Over-holds (safe, a person has to look) | 3 |
+| Correct reads | 40 of 40 (100%) |
+| Over-holds (safe, a person has to look) | 0 |
 | Wrong reads (unsafe) | 0 |
-| Correct holds | 16 of 16 (100%) |
+| Correct holds | 17 of 17 (100%) |
 | Missed holds (unsafe) | 0 |
 
 | Group | Reports | Correct reads | Over-holds | Wrong reads | Correct holds | Missed holds |
 | --- | --- | --- | --- | --- | --- | --- |
 | standard | 12 | 11 | 0 | 0 | 1 | 0 |
-| phrasing | 8 | 4 | 2 | 0 | 2 | 0 |
-| date-format | 5 | 0 | 1 | 0 | 4 | 0 |
+| phrasing | 10 | 8 | 0 | 0 | 2 | 0 |
+| date-format | 6 | 1 | 0 | 0 | 5 | 0 |
 | bilateral | 6 | 3 | 0 | 0 | 3 | 0 |
 | conflict | 4 | 2 | 0 | 0 | 2 | 0 |
 | addendum | 2 | 2 | 0 | 0 | 0 | 0 |
 | pathology | 11 | 10 | 0 | 0 | 1 | 0 |
 | injection | 2 | 2 | 0 | 0 | 0 | 0 |
 | noise | 4 | 1 | 0 | 0 | 3 | 0 |
-
-Reports the rules did not read as intended:
-
-| Report | Outcome | What happened | Note |
-| --- | --- | --- | --- |
-| R13 | over hold | No BI-RADS category in the impression. | No hyphen: 'BIRADS 4B'. The rules may not recognize it; a hold is acceptable, a wrong read is not |
-| R14 | over hold | No BI-RADS category in the impression. | Registered mark and 'Category': 'ACR BI-RADS® Category 3' |
-| R24 | over hold | No valid exam date. | Single-digit month and day: 9/8/2026. The rules want two digits; a hold is acceptable |
 
 ## Replies: Claude
 
