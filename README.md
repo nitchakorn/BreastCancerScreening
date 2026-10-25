@@ -113,8 +113,42 @@ npm run build       # rebuild docs/index.html
 | `test/policy.test.js` | The rules read every report the same way Claude did in the first version. A report the rules can't read, or a bad read, is held for a person instead of messaging her. A comparison with an inexact quote isn't used |
 | `test/reader.test.js` | Rules read reports in every mode with no model call. Recorded, live and Claude Code comparisons and replies, with the API mocked |
 
+### Evaluation: how well does it read, and is it ever unsafe
+
+`eval/` holds a synthetic evaluation corpus and a runner that scores the agent's three reading jobs. Each job has one safety number that must be zero, and the rest is coverage or cost.
+
+| Job | Corpus | Safety number (must be 0) | Cost number |
+| --- | --- | --- | --- |
+| Rules read reports | 54 reports: standard, phrasing variants, date formats, bilateral, conflicting findings, addenda, pathology, instruction text planted in a report, noise | Wrong reads and missed holds | Over-holds: readable reports a radiologist had to look at anyway |
+| Claude labels her replies | 44 replies: paraphrases, mixed labels, Spanish, a reply that embeds instructions, "STOP", a husband replying for a patient who died | Missed escalations: a reply that needed a person got an automated text | Over-escalations |
+| Claude compares pathology with imaging | 12 pairs: concordant, side mismatches, nonspecific benign results for suspicious masses, nondiagnostic samples, a pair with nothing to compare | Missed mismatches not caught by the BI-RADS 5 rule | Over-flags |
+
+Claude is scored on what the agent would do with its answer, not on the label alone. Every quote is checked word for word against the source, the same check the agent runs.
+
+```sh
+npm run eval          # the rules on the 54 reports, no model calls, exit 1 if anything is unsafe
+npm run eval:model    # also replies and comparisons through your Claude Code sign-in (56 calls, about a dollar)
+node eval/run.js --score eval/results/<file>.json   # re-score a saved run
+```
+
+Each run saves the raw model answers in `eval/results/` and writes `eval/REPORT.md`. The latest saved run (Oct 25, 2026, 56 calls through Claude Code):
+
+| | Result |
+| --- | --- |
+| Rules | 35 of 38 readable reports read correctly, 3 over-holds (`BIRADS` without a hyphen, `BI-RADS®` with the mark, a `9/8/2026` date), 16 of 16 holds, **0 unsafe** |
+| Replies | 95.5% exact label sets, 100% right action, 100% quotes found, **0 missed escalations** |
+| Comparisons | 11 of 12 match calls, 100% mismatch recall, 100% quotes found, 1 over-flag, **0 missed mismatches** |
+
+`test/eval.test.js` runs the rules part on every `npm test` and fails the build if a wrong read or a missed hold appears. It also re-scores the saved run.
+
+The three over-holds are the eval doing its job: the rules in `agent/agent.js` need `BI-RADS` with a hyphen and a two-digit date, while the checker in `server/policy.js` accepts `BIRADS`. A health system's own report formats would set which variants to add.
+
 | Path | Purpose |
 | --- | --- |
+| `eval/corpus/` | The three evaluation corpora with gold labels |
+| `eval/score.js` | Scoring, pure functions, tested |
+| `eval/run.js` | The runner: rules offline, Claude through the same reader the workspace uses |
+| `eval/results/` | Saved runs with raw model answers |
 | `server/app.js` | HTTP API, demo clock and background reader |
 | `server/loop.js` | Runs the shared engine for saved cases, one day at a time |
 | `server/policy.js` | Checks every read and works out what the page shows |
