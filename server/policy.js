@@ -1,5 +1,7 @@
 const A = require('../agent/agent.js');
 const R = A.RULES;
+// The same pattern the rules read the category with, so a quote the rules accepted is a quote the checker accepts.
+const CATEGORY = new RegExp(A.CATEGORY_PATTERN, 'i');
 
 const DOC_TYPES = ['screening', 'diagnostic', 'ultrasound', 'addendum', 'pathology'];
 const TITLES = { screening: 'Screening mammogram', diagnostic: 'Diagnostic imaging report', ultrasound: 'Ultrasound report', addendum: 'Report addendum', pathology: 'Pathology report' };
@@ -39,7 +41,7 @@ function checkReport(text, read, now) {
       if (!dates.some(date => quoted.includes(date))) problems.push('The quoted date does not support the extracted exam date.');
     }
     if (read.doc_type !== 'pathology' && typeof quotes.birads === 'string') {
-      const match = quotes.birads.match(/BI[\s-]*RADS\s*(?:category\s*)?[:\-]?\s*([0-6](?:[ABC])?)\b/i);
+      const match = quotes.birads.match(CATEGORY);
       if (!match || match[1].toUpperCase() !== String(read.birads).toUpperCase()) problems.push('The BI-RADS quote does not support the extracted category.');
     }
   }
@@ -63,7 +65,7 @@ function checkReport(text, read, now) {
         if (!/^(?:[0-6]|4[ABC])$/.test(String(b.birads))) problems.push(`A supported BI-RADS value is required for the ${b.side} breast.`);
         if (typeof q.birads !== 'string' || !q.birads.trim() || !text.includes(q.birads)) problems.push(`The ${b.side} breast's BI-RADS quote does not match the report word for word.`);
         else {
-          const match = q.birads.match(/BI[\s-]*RADS\s*(?:category\s*)?[:\-]?\s*([0-6](?:[ABC])?)\b/i);
+          const match = q.birads.match(CATEGORY);
           if (!match || match[1].toUpperCase() !== String(b.birads).toUpperCase()) problems.push(`The ${b.side} breast's BI-RADS quote does not support its category.`);
         }
         if (b.next_step && (typeof q.next_step !== 'string' || !q.next_step.trim() || !text.includes(q.next_step))) problems.push(`The ${b.side} breast's recommendation needs a quote that matches the report.`);

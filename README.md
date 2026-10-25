@@ -112,9 +112,64 @@ npm run build       # rebuild docs/index.html
 | `test/workflow.test.js` | Intake, duplicates, restarts, retries and request checks |
 | `test/policy.test.js` | The rules read every report the same way Claude did in the first version. A report the rules can't read, or a bad read, is held for a person instead of messaging her. A comparison with an inexact quote isn't used |
 | `test/reader.test.js` | Rules read reports in every mode with no model call. Recorded, live and Claude Code comparisons and replies, with the API mocked |
+| `test/eval.test.js` | The rules read the evaluation corpus with no wrong reads and no missed holds; the scorer's own logic; the saved model run re-scores clean |
+| `test/variants.test.js` | The category and date variants the eval found stay readable, the reader and the checker share one pattern, and a two-digit year still holds |
+| `test/cmo.test.js` | The CMO view's numbers match the simulation summary, each case's phases add up to its days, and the built page has no unfilled value |
+
+### Evaluation: how well does it read, and is it ever unsafe
+
+`eval/` holds a synthetic evaluation corpus and a runner that scores the agent's three reading jobs. Each job has one safety number that must be zero, and the rest is coverage or cost.
+
+| Job | Corpus | Safety number (must be 0) | Cost number |
+| --- | --- | --- | --- |
+| Rules read reports | 54 reports: standard, phrasing variants, date formats, bilateral, conflicting findings, addenda, pathology, instruction text planted in a report, noise | Wrong reads and missed holds | Over-holds: readable reports a radiologist had to look at anyway |
+| Claude labels her replies | 44 replies: paraphrases, mixed labels, Spanish, a reply that embeds instructions, "STOP", a husband replying for a patient who died | Missed escalations: a reply that needed a person got an automated text | Over-escalations |
+| Claude compares pathology with imaging | 12 pairs: concordant, side mismatches, nonspecific benign results for suspicious masses, nondiagnostic samples, a pair with nothing to compare | Missed mismatches not caught by the BI-RADS 5 rule | Over-flags |
+
+Claude is scored on what the agent would do with its answer, not on the label alone. Every quote is checked word for word against the source, the same check the agent runs.
+
+```sh
+npm run eval          # the rules on the 54 reports, no model calls, exit 1 if anything is unsafe
+npm run eval:model    # also replies and comparisons through your Claude Code sign-in (56 calls, about a dollar)
+node eval/run.js --score eval/results/<file>.json   # re-score a saved run
+```
+
+Each run saves the raw model answers in `eval/results/` and writes `eval/REPORT.md`. The saved run (Oct 25, 2026, 56 calls through Claude Code):
+
+| | Result |
+| --- | --- |
+| Rules | 40 of 40 readable reports read correctly, 17 of 17 holds, **0 unsafe** |
+| Replies | 95.5% exact label sets, 100% right action, 100% quotes found, **0 missed escalations** |
+| Comparisons | 11 of 12 match calls, 100% mismatch recall, 100% quotes found, 1 over-flag, **0 missed mismatches** |
+
+`test/eval.test.js` runs the rules part on every `npm test` and fails the build if a wrong read or a missed hold appears. It also re-scores the saved run.
+
+**What the eval changed.** The first run read 35 of 38 readable reports and held three that a radiologist would have read at a glance: `BIRADS 4B` without a hyphen, `ACR BI-RADS® Category 3` with the mark, and a `9/8/2026` date without leading zeros. Safe, but each one is a radiologist's time. The reader in `agent/agent.js` wanted the hyphen and two-digit dates, while the checker in `server/policy.js` already accepted `BIRADS`, so the two had drifted apart. The fix: one shared category pattern (`CATEGORY_PATTERN`) that both the reader and the checker use, dates with or without leading zeros, and three more corpus reports to hold the new edges (a two-digit year still holds; `BI RADS 3` and `BI-RADS category: 4A` read). `test/variants.test.js` keeps it that way. After the change: 40 of 40, 0 over-holds, still 0 unsafe. A real health system's report formats would add their own variants the same way: a corpus report first, then the rule.
+
+### The CMO view
+
+`docs/cmo.html` (live at [nitchakorn.github.io/BreastCancerScreening/cmo.html](https://nitchakorn.github.io/BreastCancerScreening/cmo.html)) is the one page a chief medical officer would read about this program. It is built by `scripts/cmo.js` from the same 90-day simulation as the main page, so the two always agree, and `test/cmo.test.js` checks that they do.
+
+It answers five questions in the order an executive asks them:
+
+| Question | What the page shows |
+| --- | --- |
+| Are we inside the window? | The CDC NBCCEDP indicator: abnormal result to final diagnosis within 60 days, target at least 75%. In the simulation, 8 of 8 (100%), median 10 days |
+| Where do the days go? | For each case, days spent reaching her and booking, waiting for the appointment slot, and waiting for the result and review. In the simulation, the slot wait is half the days, which is a scheduling problem, not an outreach problem |
+| How much human time? | Women who needed a person (5 of 11) and every handoff by role and reason: 4 to a navigator, 4 to a radiologist, 2 to surgery, against 24 texts, 3 portal messages, 2 calls, 9 replies read and 5 comparisons made by the agent |
+| What is open? | A BI-RADS 3 woman 46 days past her six-month imaging and with a navigator, and one left breast on its six-month track |
+| What did the safety checks catch? | A benign biopsy that did not explain a spiculated mass, flagged by Claude and confirmed by the radiologist, where the repeat biopsy found cancer; and a negative report over findings that described a mass, held by the rules and corrected by the radiologist |
+
+With real data the page would read from the case store instead of the simulation. The questions would not change.
 
 | Path | Purpose |
 | --- | --- |
+| `scripts/cmo.js` | Builds the CMO view from the simulation |
+| `docs/cmo.html` | The built CMO view |
+| `eval/corpus/` | The three evaluation corpora with gold labels |
+| `eval/score.js` | Scoring, pure functions, tested |
+| `eval/run.js` | The runner: rules offline, Claude through the same reader the workspace uses |
+| `eval/results/` | Saved runs with raw model answers |
 | `server/app.js` | HTTP API, demo clock and background reader |
 | `server/loop.js` | Runs the shared engine for saved cases, one day at a time |
 | `server/policy.js` | Checks every read and works out what the page shows |
@@ -219,3 +274,4 @@ No API key is stored in this repo. The page replays the recorded reads in `reads
 | `site/browser-workspace.js` | What changes when the workspace runs in the browser |
 | `docs/index.html` | The built page |
 | `docs/workspace.html` | The built workspace that runs in the browser |
+| `docs/cmo.html` | The built CMO view |

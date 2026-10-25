@@ -383,7 +383,11 @@ window.WorkspaceModules = (function () {
   */
   var LABEL = /^([A-Z][A-Z ]*[A-Z]):\s*(.*)$/;
   var GROWS = ["FINDINGS", "IMPRESSION", "CORRECTED IMPRESSION", "RECOMMENDATION", "DIAGNOSIS", "COMMENT", "INDICATION", "HISTORY"];
-  var CATEGORY = /BI-RADS\s*(?:category\s*)?:?\s*([0-6][ABC]?)\b/gi;
+  // How a report may write the category. The evaluation corpus (eval/) found reports written as "BIRADS 4B",
+  // "ACR BI-RADS® Category 3" and "BI RADS 3", all held for a radiologist until this pattern accepted them (Oct 25, 2026).
+  // server/policy.js checks every BI-RADS quote against this same pattern, so the reader and the checker agree.
+  var CATEGORY_PATTERN = "BI[\\s-]*RADS[®™]?\\s*(?:category\\s*)?[:\\-]?\\s*([0-6][ABC]?)\\b";
+  var CATEGORY = new RegExp(CATEGORY_PATTERN, "gi");
   var FINDING = /\b(mass(?:es)?|asymmetr(?:y|ies)|calcifications?|distortion|lesions?|nodules?)\b/gi;
   var NEGATED = /\b(no|not|without|negative for)\b/i;
 
@@ -407,10 +411,12 @@ window.WorkspaceModules = (function () {
     var right = /\bright\b/i.test(s || ""), left = /\bleft\b/i.test(s || "");
     return right !== left ? (right ? "right" : "left") : null;
   }
+  // A US date, month/day/year, with or without leading zeros ("09/08/2026" or "9/8/2026"). The year must have four digits.
   function isoFrom(s) {
-    var m = String(s || "").match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/);
+    var m = String(s || "").match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
     if (!m) return null;
-    var iso = m[3] + "-" + m[1] + "-" + m[2], d = new Date(iso + "T12:00:00Z");
+    var pad = function (x) { return x.length === 1 ? "0" + x : x; };
+    var iso = m[3] + "-" + pad(m[1]) + "-" + pad(m[2]), d = new Date(iso + "T12:00:00Z");
     return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso ? iso : null;
   }
   function categoriesIn(s) {
@@ -1056,7 +1062,7 @@ window.WorkspaceModules = (function () {
     return { events: events, snapshots: snapshots };
   }
 
-  var api = { RULES: RULES, EXCEPTIONS: EXCEPTIONS, TEMPLATES: TEMPLATES, simulate: simulate, createEngine: createEngine, newCase: newCase,
+  var api = { RULES: RULES, EXCEPTIONS: EXCEPTIONS, TEMPLATES: TEMPLATES, CATEGORY_PATTERN: CATEGORY_PATTERN, simulate: simulate, createEngine: createEngine, newCase: newCase,
     readReport: readReport, checkComparison: checkComparison, checkRead: checkRead, summarizeRead: summarizeRead, normBirads: normBirads, pathwayFor: pathwayFor, catOf: catOf,
     followSide: followSide, perBreast: perBreast, sideRead: sideRead,
     addDays: addDays, addMonths: addMonths, dayOf: dayOf, dateOf: dateOf, fmt: fmt, fmtShort: fmtShort, weekday: weekday, message: message };
@@ -1067,6 +1073,8 @@ window.WorkspaceModules = (function () {
     "server/policy.js": function (module, exports, require, __dirname) {
 const A = require('../agent/agent.js');
 const R = A.RULES;
+// The same pattern the rules read the category with, so a quote the rules accepted is a quote the checker accepts.
+const CATEGORY = new RegExp(A.CATEGORY_PATTERN, 'i');
 
 const DOC_TYPES = ['screening', 'diagnostic', 'ultrasound', 'addendum', 'pathology'];
 const TITLES = { screening: 'Screening mammogram', diagnostic: 'Diagnostic imaging report', ultrasound: 'Ultrasound report', addendum: 'Report addendum', pathology: 'Pathology report' };
@@ -1106,7 +1114,7 @@ function checkReport(text, read, now) {
       if (!dates.some(date => quoted.includes(date))) problems.push('The quoted date does not support the extracted exam date.');
     }
     if (read.doc_type !== 'pathology' && typeof quotes.birads === 'string') {
-      const match = quotes.birads.match(/BI[\s-]*RADS\s*(?:category\s*)?[:\-]?\s*([0-6](?:[ABC])?)\b/i);
+      const match = quotes.birads.match(CATEGORY);
       if (!match || match[1].toUpperCase() !== String(read.birads).toUpperCase()) problems.push('The BI-RADS quote does not support the extracted category.');
     }
   }
@@ -1130,7 +1138,7 @@ function checkReport(text, read, now) {
         if (!/^(?:[0-6]|4[ABC])$/.test(String(b.birads))) problems.push(`A supported BI-RADS value is required for the ${b.side} breast.`);
         if (typeof q.birads !== 'string' || !q.birads.trim() || !text.includes(q.birads)) problems.push(`The ${b.side} breast's BI-RADS quote does not match the report word for word.`);
         else {
-          const match = q.birads.match(/BI[\s-]*RADS\s*(?:category\s*)?[:\-]?\s*([0-6](?:[ABC])?)\b/i);
+          const match = q.birads.match(CATEGORY);
           if (!match || match[1].toUpperCase() !== String(b.birads).toUpperCase()) problems.push(`The ${b.side} breast's BI-RADS quote does not support its category.`);
         }
         if (b.next_step && (typeof q.next_step !== 'string' || !q.next_step.trim() || !text.includes(q.next_step))) problems.push(`The ${b.side} breast's recommendation needs a quote that matches the report.`);
