@@ -107,3 +107,6 @@ const workspace = appPage
 if (/href="\/|src="\//.test(workspace)) throw new Error("workspace.html still has a root-relative link");
 fs.writeFileSync(path.join(root, "docs/workspace.html"), workspace);
 console.log("wrote docs/workspace.html (" + workspace.length + " bytes)");
+
+// The CMO view is built from the same simulation, so its numbers always agree with the page above.
+require("./cmo.js");

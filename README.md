@@ -114,6 +114,7 @@ npm run build       # rebuild docs/index.html
 | `test/reader.test.js` | Rules read reports in every mode with no model call. Recorded, live and Claude Code comparisons and replies, with the API mocked |
 | `test/eval.test.js` | The rules read the evaluation corpus with no wrong reads and no missed holds; the scorer's own logic; the saved model run re-scores clean |
 | `test/variants.test.js` | The category and date variants the eval found stay readable, the reader and the checker share one pattern, and a two-digit year still holds |
+| `test/cmo.test.js` | The CMO view's numbers match the simulation summary, each case's phases add up to its days, and the built page has no unfilled value |
 
 ### Evaluation: how well does it read, and is it ever unsafe
 
@@ -145,8 +146,26 @@ Each run saves the raw model answers in `eval/results/` and writes `eval/REPORT.
 
 **What the eval changed.** The first run read 35 of 38 readable reports and held three that a radiologist would have read at a glance: `BIRADS 4B` without a hyphen, `ACR BI-RADS® Category 3` with the mark, and a `9/8/2026` date without leading zeros. Safe, but each one is a radiologist's time. The reader in `agent/agent.js` wanted the hyphen and two-digit dates, while the checker in `server/policy.js` already accepted `BIRADS`, so the two had drifted apart. The fix: one shared category pattern (`CATEGORY_PATTERN`) that both the reader and the checker use, dates with or without leading zeros, and three more corpus reports to hold the new edges (a two-digit year still holds; `BI RADS 3` and `BI-RADS category: 4A` read). `test/variants.test.js` keeps it that way. After the change: 40 of 40, 0 over-holds, still 0 unsafe. A real health system's report formats would add their own variants the same way: a corpus report first, then the rule.
 
+### The CMO view
+
+`docs/cmo.html` (live at [nitchakorn.github.io/BreastCancerScreening/cmo.html](https://nitchakorn.github.io/BreastCancerScreening/cmo.html)) is the one page a chief medical officer would read about this program. It is built by `scripts/cmo.js` from the same 90-day simulation as the main page, so the two always agree, and `test/cmo.test.js` checks that they do.
+
+It answers five questions in the order an executive asks them:
+
+| Question | What the page shows |
+| --- | --- |
+| Are we inside the window? | The CDC NBCCEDP indicator: abnormal result to final diagnosis within 60 days, target at least 75%. In the simulation, 8 of 8 (100%), median 10 days |
+| Where do the days go? | For each case, days spent reaching her and booking, waiting for the appointment slot, and waiting for the result and review. In the simulation, the slot wait is half the days, which is a scheduling problem, not an outreach problem |
+| How much human time? | Women who needed a person (5 of 11) and every handoff by role and reason: 4 to a navigator, 4 to a radiologist, 2 to surgery, against 24 texts, 3 portal messages, 2 calls, 9 replies read and 5 comparisons made by the agent |
+| What is open? | A BI-RADS 3 woman 46 days past her six-month imaging and with a navigator, and one left breast on its six-month track |
+| What did the safety checks catch? | A benign biopsy that did not explain a spiculated mass, flagged by Claude and confirmed by the radiologist, where the repeat biopsy found cancer; and a negative report over findings that described a mass, held by the rules and corrected by the radiologist |
+
+With real data the page would read from the case store instead of the simulation. The questions would not change.
+
 | Path | Purpose |
 | --- | --- |
+| `scripts/cmo.js` | Builds the CMO view from the simulation |
+| `docs/cmo.html` | The built CMO view |
 | `eval/corpus/` | The three evaluation corpora with gold labels |
 | `eval/score.js` | Scoring, pure functions, tested |
 | `eval/run.js` | The runner: rules offline, Claude through the same reader the workspace uses |
@@ -255,3 +274,4 @@ No API key is stored in this repo. The page replays the recorded reads in `reads
 | `site/browser-workspace.js` | What changes when the workspace runs in the browser |
 | `docs/index.html` | The built page |
 | `docs/workspace.html` | The built workspace that runs in the browser |
+| `docs/cmo.html` | The built CMO view |
